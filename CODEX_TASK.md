@@ -69,6 +69,13 @@ All user-owned data must be protected with Row Level Security using `auth.uid() 
 - Do not hardcode Supabase keys.
 - Do not require a custom backend for MVP.
 - Game create/update operations must be transactional so `games.winner_participant_id`, `games.winner_player_id`, and `game_participants.is_winner` are written atomically and remain synchronized.
+- Add Game player fields must provide combobox UX that supports selecting existing players and inline creation of new players.
+- Player creation/matching must use shared normalization helpers (trim, collapse internal whitespace, case-insensitive matching) before lookup, validation, and insert.
+- On submit, resolve all seat player names to canonical player IDs in one transactional flow: reuse normalized matches, create only missing players, and deduplicate repeated normalized names within the same game payload.
+- Validation must block empty normalized names and surface clear inline errors.
+- If a normalized match already exists, UI should clearly indicate the existing player will be reused rather than creating a new record.
+- Provide Players management UX for post-hoc player rename and merge, with safeguards and confirmation because merges rewrite historical stats.
+- Rename and merge operations must update dependent game references atomically (including `game_participants.player_id` and `games.winner_player_id`).
 
 ## Suggested Folder Structure
 

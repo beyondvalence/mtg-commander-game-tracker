@@ -120,7 +120,7 @@ Fields:
 - Optional game duration in minutes
 - Number of players, default 4
 - Turn order
-- Player name for each seat
+- Player for each seat (select existing or create inline)
 - Primary commander for each player
 - Optional secondary commander / partner / background for each player
 - Winning player
@@ -163,6 +163,16 @@ Winner selection:
 
 - Winner is selected by player
 - Winning commander or commander pair is selected based on that player's selected commander(s)
+
+
+Player selection and creation policy:
+
+- Add Game must support both selecting an existing player and creating a new player inline per seat.
+- Inline creation is part of the Add Game submission flow and must not require visiting the Players page first.
+- If the entered player name matches an existing player after normalization (see normalization policy), the existing player record must be reused instead of creating a duplicate.
+- If no normalized match exists, create one new `players` row and reuse that row for any repeated seats with the same normalized name in the same form submission.
+- Add Game must not be restricted to existing players only.
+
 
 ### 5.4 Game History
 
@@ -227,6 +237,14 @@ Show player performance.
 
 Stats:
 
+
+Player record lifecycle policy:
+
+- Users can edit player display names later from the Players area (or equivalent edit flow), subject to uniqueness validation after normalization.
+- Users can merge duplicate player records later (for example, if legacy data created duplicates before normalization was enforced).
+- A merge operation must migrate all historical references (`game_participants.player_id`, `games.winner_player_id`) to the canonical target player, then delete or archive the source player.
+- Merge operations must be transactional to prevent partial stats rewrites.
+
 - Games played
 - Wins
 - Losses
@@ -268,6 +286,19 @@ Fields:
 - name text not null
 - created_at timestamptz
 - updated_at timestamptz
+
+
+Player name normalization and uniqueness:
+
+- Database uniqueness baseline remains `UNIQUE (user_id, name)`.
+- Application-level canonicalization must be applied before read/write comparisons:
+  - Trim leading/trailing whitespace.
+  - Collapse internal consecutive whitespace to a single space.
+  - Apply Unicode-aware case-folding for comparisons.
+- Matching and duplicate prevention are case-insensitive and whitespace-insensitive under the canonicalization above (for example, `" Alice "`, `"alice"`, and `"ALICE"` map to the same logical player).
+- Persisted display value should use the trimmed/collapsed form; preserve user-entered letter casing for display when possible.
+- Validation must reject names that are empty after normalization.
+- If database collation behavior differs from application comparison behavior, application normalization rules are authoritative for lookup/reuse decisions, and writes must still satisfy the schema unique constraint.
 
 ### 6.3 commanders
 

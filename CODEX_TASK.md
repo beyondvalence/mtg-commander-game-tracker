@@ -56,7 +56,7 @@ Implement:
 
 ## Database
 
-Use `supabase/schema.sql` as the starting schema.
+Use `schema.sql` as the starting schema.
 
 All user-owned data must be protected with Row Level Security using `auth.uid() = user_id`.
 

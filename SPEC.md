@@ -491,3 +491,147 @@ Do not include in MVP unless explicitly requested later:
 - Commander damage tracking during game
 - Native mobile app
 - Offline-first mode
+
+
+## 6. Deterministic Analytics Semantics
+
+This section defines the canonical computation rules for all dashboard analytics. Any backend SQL, client-side aggregation, or exported reports must produce the same outputs when given the same filtered game set.
+
+### 6.1 Global Data Normalization
+
+- **Timezone basis:** convert each game timestamp to the user's configured local timezone before bucketing. If no user timezone is configured, use UTC.
+- **Canonical game date:** `local_game_date = date(game_started_at in analytics timezone)`.
+- **Participant eligibility:** only participants with a non-empty primary commander are included in commander-level metrics.
+- **Commander identity key:** use `primary_commander_scryfall_id` when present; else normalize `primary_commander_name` (trim + casefold).
+- **Commander pair identity key:**
+  - If only one commander exists for the participant, pair key is the single commander key.
+  - If two commanders exist, create a 2-item sorted tuple of commander identity keys so ordering is deterministic.
+- **Winner source of truth:** participant row with `is_winner = true` is authoritative.
+- **Duplicate records:** if the same `game_id` appears multiple times due to join fanout, deduplicate by `(game_id, participant_id)` before any aggregation.
+
+### 6.2 Chart Semantics
+
+#### A) Commander Win Rate
+
+- **Grouping key:** commander identity key.
+- **Numerator:** count of participant rows where `is_winner = true` for that commander.
+- **Denominator:** count of all participant rows for that commander after filters.
+- **Null/unknown handling:**
+  - Missing commander ID + empty commander name => excluded from metric and labeled data-quality warning in UI.
+  - Missing winner flag => treat as `false` unless another participant in same game is explicitly winner.
+- **Tie/duplicate handling:**
+  - If multiple winners are marked in one game, count each marked winner (shared win scenario).
+  - Duplicate `(game_id, participant_id)` rows count once.
+
+#### B) Commander Pair Win Rate
+
+- **Grouping key:** commander pair identity key (single-key for solo commander decks).
+- **Numerator:** count of participant rows in group with `is_winner = true`.
+- **Denominator:** count of participant rows in group.
+- **Null/unknown handling:**
+  - Unknown secondary commander is allowed for single-commander grouping.
+  - Secondary provided without valid primary => exclude row.
+- **Tie/duplicate handling:** same as Commander Win Rate.
+
+#### C) Turn-Order Advantage
+
+- **Grouping key:** `turn_order_position` (1-based integer).
+- **Numerator:** wins by participants in each turn position.
+- **Denominator:** games where that turn position exists.
+- **Null/unknown handling:**
+  - Null/invalid turn position => excluded.
+  - Positions beyond player count in a game are invalid and excluded.
+- **Tie/duplicate handling:**
+  - Multiple winners in one game can increment multiple positions.
+  - Duplicate rows deduplicated by `(game_id, participant_id)`.
+
+#### D) Date Trends (Games Played Over Time)
+
+- **Grouping key:** date bucket (`day`, `week`, `month`) derived from `local_game_date`.
+- **Numerator:** number of distinct games in bucket.
+- **Denominator:** not applicable.
+- **Null/unknown handling:** games without timestamp/date are excluded.
+- **Tie/duplicate handling:** count distinct `game_id` only.
+- **Bucket rules:**
+  - Day: `YYYY-MM-DD` local date.
+  - Week: ISO week, bucket label `YYYY-Www`, week starts Monday.
+  - Month: `YYYY-MM`.
+
+#### E) Rolling Average Win Rate
+
+- **Grouping key:** chronological game index within filtered set, sorted by `(game_started_at asc, game_id asc)`.
+- **Point metric input:** per-game binary outcome for selected entity (default player): 1 = win, 0 = loss.
+- **Denominator:** rolling window size `N` (or fewer points for warm-up when fewer than `N` prior games).
+- **Null/unknown handling:** games where selected entity did not participate are skipped.
+- **Tie/duplicate handling:**
+  - Multiple winner flags in a game still produce binary 1/0 for selected entity.
+  - Duplicate participation rows collapse to one participation outcome per `(game_id, entity)`.
+
+### 6.3 Filter Composition Semantics
+
+- **Composition logic:** all active filters combine with logical AND.
+- **Multi-select within one filter:** logical OR within that filter.
+- **Default filters at dashboard load:**
+  - Date range: all time.
+  - Player/Commander/Pair/Win condition/Turn order: unscoped (all).
+  - Number of players: all supported sizes.
+  - Rolling window: 10.
+- **Reset behavior:**
+  - "Reset filters" restores defaults above.
+  - Reset does not change timezone preference.
+  - Changing timezone recomputes date buckets immediately using same non-date filters.
+
+### 6.4 Acceptance Checks (Synthetic Data)
+
+#### Dataset A: Mixed 4-player games, single winner each
+
+Games (local timezone UTC, day buckets):
+
+1. 2026-01-01, players: A(Seat1, Cmdr X, win), B(Seat2, Cmdr Y), C(Seat3, Cmdr X), D(Seat4, Cmdr Z)
+2. 2026-01-02, players: A(Seat1, Cmdr X), B(Seat2, Cmdr Y, win), C(Seat3, Cmdr P+Q), D(Seat4, Cmdr Z)
+3. 2026-01-08, players: A(Seat1, Cmdr X), B(Seat2, Cmdr Y), C(Seat3, Cmdr P+Q, win), D(Seat4, Cmdr Z)
+
+Expected outputs:
+
+- Commander win rate:
+  - Cmdr X: wins 1 / games 3 = 33.33%
+  - Cmdr Y: wins 1 / games 3 = 33.33%
+  - Cmdr Z: wins 0 / games 3 = 0%
+  - Cmdr P: wins 1 / games 2 = 50% (for primary commander chart when P is primary)
+- Pair win rate:
+  - `P+Q`: wins 1 / games 2 = 50%
+- Turn-order:
+  - Seat1: 1/3 = 33.33%
+  - Seat2: 1/3 = 33.33%
+  - Seat3: 1/3 = 33.33%
+  - Seat4: 0/3 = 0%
+- Date trends:
+  - Day buckets: 2026-01-01 => 1, 2026-01-02 => 1, 2026-01-08 => 1
+  - ISO week buckets: 2026-W01 => 2, 2026-W02 => 1
+- Rolling average (entity A, N=2): outcomes [1,0,0] => rolling [1.00,0.50,0.00]
+
+#### Dataset B: Duplicate row + multi-winner tie + timezone bucket edge
+
+Assume analytics timezone `America/Los_Angeles`.
+
+Games:
+
+1. `game_id=10`, timestamp `2026-02-01T07:30:00Z` (local 2026-01-31 23:30), Seat1 Cmdr M winner, Seat2 Cmdr N winner (tie).
+2. `game_id=11`, timestamp `2026-02-01T09:00:00Z` (local 2026-02-01 01:00), Seat1 Cmdr M loss, Seat2 Cmdr N win.
+3. Duplicate ingestion bug repeats participant row `(game_id=11, participant_id=11-2)` once.
+
+Expected outputs after deduplication:
+
+- Date trends day buckets:
+  - 2026-01-31 => 1 game
+  - 2026-02-01 => 1 game
+- Commander win rate:
+  - Cmdr M: wins 1 / games 2 = 50%
+  - Cmdr N: wins 2 / games 2 = 100%
+- Turn-order:
+  - Seat1: 1/2 = 50%
+  - Seat2: 2/2 = 100%
+- Pair win rate (single-commander keys here) matches commander values.
+- Rolling average (entity Seat2/Cmdr N, N=2): outcomes [1,1] => [1.00,1.00]
+
+Passing criteria: implementation outputs must match these values exactly (within rounding tolerance ±0.01 percentage points for UI display).

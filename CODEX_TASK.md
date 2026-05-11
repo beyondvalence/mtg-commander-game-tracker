@@ -112,3 +112,30 @@ The app is complete when:
 10. Edge-case legal commanders are supported without false exclusion, including commander + Background pairings, partner-family pairings, and legal non-creature commanders that explicitly say they can be your commander.
 11. The app works on a mobile browser.
 12. The app can be deployed to Vercel with environment variables.
+
+
+## Deterministic Analytics Requirements
+
+Implementation must follow `SPEC.md` section "Deterministic Analytics Semantics" exactly.
+
+Required implementation guarantees:
+
+1. Encode deterministic definitions for each chart:
+   - commander win rate,
+   - commander pair win rate,
+   - turn-order advantage,
+   - date trends,
+   - rolling average.
+2. Enforce deterministic rules for:
+   - grouping keys,
+   - denominator and numerator semantics,
+   - null/unknown handling,
+   - tie/multi-winner handling,
+   - duplicate row deduplication,
+   - day/week/month bucket rules and timezone basis.
+3. Filter behavior must be deterministic:
+   - AND across filters,
+   - OR within multi-select filter values,
+   - defined defaults on initial load,
+   - reset restores defaults without changing timezone.
+4. Add automated acceptance checks (unit tests or fixture-driven checks) covering at least two synthetic datasets equivalent to the examples in `SPEC.md` and asserting expected outputs.

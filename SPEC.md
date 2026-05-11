@@ -131,13 +131,27 @@ Fields:
 Commander autocomplete:
 
 - Use Scryfall API
-- Search Commander-legal cards where possible
-- Store Scryfall card ID
-- Store card name
-- Store image URL if available
-- Store color identity if available
-- Store type line if available
-- Store oracle text if available
+- Default search must use a strict Commander-eligible query that returns only cards that can legally be chosen as a commander in normal Commander deck construction. The strict filter must include:
+  - legendary creatures,
+  - cards with explicit text that they can be your commander,
+  - cards with `Partner`, `Friends forever`, `Choose a Background`, `Doctor's companion`, or `Create a Character` where applicable,
+  - cards that are legal in Commander (`format:commander`).
+- Background cards must be queried from Scryfall with a dedicated strict filter that only returns legal Background enchantments (`type:background format:commander`) for secondary commander selection.
+- Fallback behavior: if a strict query for a specific field returns zero results, immediately retry with a broader Commander-legal query (still `format:commander`) and clearly mark results as "broadened" so the user understands why non-default matches are shown.
+- Persist selected card metadata from Scryfall for every commander slot:
+  - Scryfall card ID
+  - Card name
+  - Image URL if available
+  - Color identity if available
+  - Type line if available
+  - Oracle text if available
+
+Commander legality edge cases:
+
+- Do not exclude legal non-creature commanders (for example, cards with "can be your commander" text).
+- Do not exclude valid two-card commander configurations, including partner-family pairings and commander + Background combinations.
+- For secondary commander fields, only allow pairings that are rules-compatible with the selected primary commander ability family (for example Partner with Partner, Background only when the primary card allows Background).
+- If legality cannot be fully validated client-side, allow save with a warning instead of silently blocking valid uncommon commander cases.
 
 Turn order:
 

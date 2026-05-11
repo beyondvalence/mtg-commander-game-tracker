@@ -35,7 +35,7 @@ Implement:
 - Supabase email/password login
 - Protected authenticated layout
 - Logout
-- Scryfall commander autocomplete
+- Scryfall commander autocomplete with strict Commander-eligibility filtering and documented fallback behavior
 - Single commander support
 - Partner/background/secondary commander support
 - Variable player count with default of 4
@@ -103,9 +103,12 @@ The app is complete when:
 1. A user can sign up, sign in, and sign out.
 2. A user can add a Commander game with 2+ players, defaulting to 4.
 3. Each player can have a primary commander and optional secondary commander.
-4. Commander fields use Scryfall autocomplete.
-5. The user can select a winner and win condition.
-6. The game appears in Game History.
-7. The Dashboard shows commander win rates, turn-order advantage, date trends, and rolling averages.
-8. The app works on a mobile browser.
-9. The app can be deployed to Vercel with environment variables.
+4. Commander fields use Scryfall autocomplete with strict default filtering for Commander-eligible cards and a fallback query when strict search returns no results.
+5. Autocomplete results are relevance-ranked so exact and prefix name matches appear before looser text matches.
+6. Persisted commander selections include, at minimum, Scryfall card ID, card name, image URL (if present), color identity (if present), type line (if present), and oracle text (if present).
+7. The user can select a winner and win condition.
+8. The game appears in Game History.
+9. The Dashboard shows commander win rates, turn-order advantage, date trends, and rolling averages.
+10. Edge-case legal commanders are supported without false exclusion, including commander + Background pairings, partner-family pairings, and legal non-creature commanders that explicitly say they can be your commander.
+11. The app works on a mobile browser.
+12. The app can be deployed to Vercel with environment variables.

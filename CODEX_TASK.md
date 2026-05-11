@@ -68,6 +68,7 @@ All user-owned data must be protected with Row Level Security using `auth.uid() 
 - Use `.env.example` as the environment variable template.
 - Do not hardcode Supabase keys.
 - Do not require a custom backend for MVP.
+- Game create/update operations must be transactional so `games.winner_participant_id`, `games.winner_player_id`, and `game_participants.is_winner` are written atomically and remain synchronized.
 
 ## Suggested Folder Structure
 

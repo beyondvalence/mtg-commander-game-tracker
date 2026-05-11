@@ -283,8 +283,19 @@ Fields:
 - played_at date not null
 - duration_minutes integer nullable
 - number_of_players integer not null default 4
-- winner_player_id uuid references players(id)
-- winner_participant_id uuid references game_participants(id), nullable at creation time if needed
+- winner_player_id uuid references players(id), optional compatibility column
+- winner_participant_id uuid references game_participants(id)
+
+Winner representation (canonical):
+
+- Canonical winner is `games.winner_participant_id`.
+- `game_participants.is_winner` is retained as a synchronized mirror for query ergonomics.
+- `winner_player_id` is retained only for compatibility and must equal the winner participant's `player_id`.
+- Synchronization rules:
+  - Exactly one participant row per game must have `is_winner = true`.
+  - That row's `id` must equal `games.winner_participant_id`.
+  - The winner participant must belong to the same game (`game_participants.game_id = games.id`).
+  - If `winner_player_id` is non-null, it must equal the winner participant's `player_id`.
 - win_condition text not null
 - notes text
 - created_at timestamptz

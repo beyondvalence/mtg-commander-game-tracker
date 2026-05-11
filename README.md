@@ -62,7 +62,7 @@ npm run dev
 1. Create a Supabase project.
 2. Enable email/password auth.
 3. Open the Supabase SQL editor.
-4. Run `supabase/schema.sql`.
+4. Run `schema.sql`.
 5. Copy the project URL and anon key into `.env.local`.
 
 ## Deployment

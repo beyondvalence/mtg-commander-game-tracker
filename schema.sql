@@ -102,6 +102,81 @@ foreign key (winner_participant_id)
 references public.game_participants(id)
 on delete set null;
 
+create unique index if not exists idx_game_participants_one_winner_per_game
+on public.game_participants (game_id)
+where is_winner;
+
+create or replace function public.enforce_game_winner_consistency()
+returns trigger as $$
+declare
+  v_game_id uuid;
+  v_winner_participant_id uuid;
+  v_winner_player_id uuid;
+  v_marked_winner_count integer;
+begin
+  v_game_id := coalesce(new.game_id, old.game_id, new.id, old.id);
+
+  select g.winner_participant_id, g.winner_player_id
+    into v_winner_participant_id, v_winner_player_id
+  from public.games g
+  where g.id = v_game_id;
+
+  if v_winner_participant_id is null then
+    raise exception 'games.winner_participant_id must be set for game %', v_game_id;
+  end if;
+
+  if not exists (
+    select 1
+    from public.game_participants gp
+    where gp.id = v_winner_participant_id
+      and gp.game_id = v_game_id
+  ) then
+    raise exception 'winner_participant_id % must belong to game %', v_winner_participant_id, v_game_id;
+  end if;
+
+  select count(*)
+    into v_marked_winner_count
+  from public.game_participants gp
+  where gp.game_id = v_game_id
+    and gp.is_winner = true;
+
+  if v_marked_winner_count <> 1 then
+    raise exception 'game % must have exactly one game_participants.is_winner = true row', v_game_id;
+  end if;
+
+  if not exists (
+    select 1
+    from public.game_participants gp
+    where gp.game_id = v_game_id
+      and gp.id = v_winner_participant_id
+      and gp.is_winner = true
+  ) then
+    raise exception 'winner_participant_id % for game % must be marked is_winner = true', v_winner_participant_id, v_game_id;
+  end if;
+
+  if v_winner_player_id is not null and not exists (
+    select 1
+    from public.game_participants gp
+    where gp.id = v_winner_participant_id
+      and gp.player_id = v_winner_player_id
+  ) then
+    raise exception 'games.winner_player_id must match winner participant player_id for game %', v_game_id;
+  end if;
+
+  return null;
+end;
+$$ language plpgsql;
+
+create constraint trigger trg_enforce_game_winner_consistency_from_games
+after insert or update of winner_participant_id, winner_player_id on public.games
+deferrable initially deferred
+for each row execute function public.enforce_game_winner_consistency();
+
+create constraint trigger trg_enforce_game_winner_consistency_from_participants
+after insert or update of is_winner, game_id, player_id or delete on public.game_participants
+deferrable initially deferred
+for each row execute function public.enforce_game_winner_consistency();
+
 -- Indexes
 create index if not exists idx_players_user_id on public.players(user_id);
 create index if not exists idx_commanders_user_id on public.commanders(user_id);

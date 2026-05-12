@@ -1,4 +1,28 @@
-import { Heart, Play, Share2 } from 'lucide-react';
+function PlayIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M8 5.14v13.72a1 1 0 001.5.86l10.29-6.86a1 1 0 000-1.72L9.5 4.28A1 1 0 008 5.14z" />
+    </svg>
+  );
+}
+
+function HeartIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className={className}>
+      <path d="M12 21s-7.5-4.35-9.5-8.72C.91 8.97 2.44 5 6.26 5c2.24 0 3.36 1.26 3.74 2.02C10.38 6.26 11.5 5 13.74 5c3.82 0 5.35 3.97 3.76 7.28C19.5 16.65 12 21 12 21z" />
+    </svg>
+  );
+}
+
+function ShareIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className={className}>
+      <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" />
+      <path d="M12 3v12" />
+      <path d="M7 8l5-5 5 5" />
+    </svg>
+  );
+}
 
 export default function DashboardPage() {
   return (
@@ -36,14 +60,14 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-[1fr_auto_auto] divide-x divide-zinc-500/70">
               <button className="m-6 flex items-center justify-center gap-4 rounded-full bg-[#5B6016] px-8 py-5 text-2xl font-medium text-zinc-100 transition hover:brightness-110 md:text-3xl">
-                <Play className="h-7 w-7 fill-current" />
+                <PlayIcon className="h-7 w-7" />
                 Launch experiment
               </button>
               <button className="flex aspect-square items-center justify-center p-5 text-zinc-700 hover:bg-zinc-200">
-                <Heart className="h-9 w-9" />
+                <HeartIcon className="h-9 w-9" />
               </button>
               <button className="flex aspect-square items-center justify-center p-5 text-zinc-700 hover:bg-zinc-200">
-                <Share2 className="h-9 w-9" />
+                <ShareIcon className="h-9 w-9" />
               </button>
             </div>
           </div>

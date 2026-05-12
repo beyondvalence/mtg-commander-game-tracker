@@ -7,30 +7,35 @@ export default function AddGamePage() {
   const [picked, setPicked] = useState<any[]>([]);
 
   return (
-    <form className='space-y-3' onSubmit={handleSubmit((v) => console.log(v, picked))}>
-      <input type='date' className='border p-2' {...register('playedAt')} />
-      <input type='number' defaultValue={4} min={2} className='border p-2' {...register('playersCount')} />
-      <select className='border p-2' {...register('winCondition')}>
-        <option>Combat</option>
-        <option>Combo</option>
-        <option>Commander Damage</option>
-        <option>Other</option>
-      </select>
+    <section className='wireframe-shell'>
+      <form className='mx-auto flex w-full max-w-3xl flex-col items-center space-y-4 text-center' onSubmit={handleSubmit((v) => console.log(v, picked))}>
+        <h1 className='wireframe-title'>Add Game</h1>
+        <input type='date' className='w-full rounded-xl border border-zinc-500 bg-zinc-50 p-3 text-xl' {...register('playedAt')} />
+        <input type='number' defaultValue={4} min={2} className='w-full rounded-xl border border-zinc-500 bg-zinc-50 p-3 text-xl' {...register('playersCount')} />
+        <select className='w-full rounded-xl border border-zinc-500 bg-zinc-50 p-3 text-xl' {...register('winCondition')}>
+          <option>Combat</option>
+          <option>Combo</option>
+          <option>Commander Damage</option>
+          <option>Other</option>
+        </select>
 
-      <CommanderAutocomplete onSelect={(c) => setPicked((prev) => [...prev, c])} />
-
-      {picked.length > 0 ? (
-        <div className='rounded border p-2'>
-          <p className='text-sm font-medium'>Selected commanders</p>
-          <ul className='list-inside list-disc text-sm'>
-            {picked.map((c, idx) => (
-              <li key={`${c.scryfallId}-${idx}`}>{c.name}</li>
-            ))}
-          </ul>
+        <div className='w-full'>
+          <CommanderAutocomplete onSelect={(c) => setPicked((prev) => [...prev, c])} />
         </div>
-      ) : null}
 
-      <button className='sticky bottom-3 bg-blue-600 px-4 py-2 text-white'>Save Game</button>
-    </form>
+        {picked.length > 0 ? (
+          <div className='w-full rounded-xl border border-zinc-500 p-4 text-left'>
+            <p className='text-xl font-semibold'>Selected commanders</p>
+            <ul className='list-inside list-disc text-lg'>
+              {picked.map((c, idx) => (
+                <li key={`${c.scryfallId}-${idx}`}>{c.name}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <button className='rounded-full border border-zinc-500 bg-zinc-900 px-8 py-3 text-2xl text-zinc-100'>Save Game</button>
+      </form>
+    </section>
   );
 }

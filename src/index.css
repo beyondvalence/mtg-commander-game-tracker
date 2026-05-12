@@ -1,2 +1,26 @@
-@tailwind base; @tailwind components; @tailwind utilities;
-body { @apply bg-slate-50 text-slate-900; }
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-zinc-200 text-zinc-900;
+  font-family: "Inter", "Segoe UI", sans-serif;
+}
+
+@layer components {
+  .wireframe-shell {
+    @apply mx-auto w-full max-w-[1400px] rounded-[2rem] border border-zinc-600 bg-zinc-100 px-6 py-8 md:px-10;
+  }
+
+  .wireframe-page {
+    @apply wireframe-shell flex min-h-[70vh] items-center justify-center text-center;
+  }
+
+  .wireframe-title {
+    @apply text-5xl font-black tracking-tight md:text-7xl;
+  }
+
+  .wireframe-copy {
+    @apply text-xl leading-relaxed md:text-3xl;
+  }
+}

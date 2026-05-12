@@ -1,1 +1,7 @@
-export default function PlayersPage(){return <div>Players management placeholder for rename/merge.</div>}
+export default function PlayersPage() {
+  return (
+    <section className='wireframe-page'>
+      <p className='wireframe-copy'>Players management placeholder for rename/merge.</p>
+    </section>
+  );
+}

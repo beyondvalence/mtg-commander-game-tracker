@@ -1,2 +1,28 @@
 import { Link, Outlet } from 'react-router-dom';
-export function Layout() { return <div className='p-4 space-y-4'><nav className='flex gap-3 text-sm'>{['/','/add-game','/history','/commanders','/players'].map((p)=><Link key={p} to={p}>{p}</Link>)}</nav><Outlet/></div>; }
+
+const links = [
+  { to: '/', label: 'Home' },
+  { to: '/add-game', label: 'Add Game' },
+  { to: '/history', label: 'History' },
+  { to: '/commanders', label: 'Commanders' },
+  { to: '/players', label: 'Players' },
+];
+
+export function Layout() {
+  return (
+    <div className='mx-auto w-full max-w-[1500px] space-y-6 px-4 py-6 md:px-8'>
+      <nav className='wireframe-shell flex flex-wrap items-center justify-center gap-3 text-xl font-semibold md:text-3xl'>
+        {links.map((link) => (
+          <Link
+            key={link.to}
+            to={link.to}
+            className='rounded-full border border-zinc-500 px-5 py-2 transition hover:bg-zinc-200'
+          >
+            {link.label}
+          </Link>
+        ))}
+      </nav>
+      <Outlet />
+    </div>
+  );
+}

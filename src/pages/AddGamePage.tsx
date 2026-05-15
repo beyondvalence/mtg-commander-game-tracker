@@ -7,6 +7,7 @@ import type { CommanderCard } from '../types/app';
 import type { ParticipantInput } from '../types/app';
 
 type AddGameFormValues = {
+  gameTitle: string;
   playedAt: string;
   playersCount: string;
   winCondition: string;
@@ -87,6 +88,7 @@ function isSecondarySelectionValid(primary: CommanderCard | null | undefined, se
 export default function AddGamePage() {
   const { register, handleSubmit, watch } = useForm<AddGameFormValues>({
     defaultValues: {
+      gameTitle: '',
       playedAt: new Date().toISOString().slice(0, 10),
       playersCount: '4',
       winCondition: '',
@@ -275,6 +277,7 @@ export default function AddGamePage() {
       const { data: gameData, error: gameError } = await supabase
         .from('games')
         .insert({
+          title: formData.gameTitle.trim() || null,
           played_at: formData.playedAt,
           number_of_players: parseInt(formData.playersCount, 10),
           win_condition: formData.winCondition,
@@ -336,6 +339,13 @@ export default function AddGamePage() {
     <section className='wireframe-shell'>
       <form className='mx-auto flex w-full max-w-5xl flex-col items-center space-y-4 text-center' onSubmit={handleSubmit(handleSaveGame)}>
         <h1 className='wireframe-title'>Add Game</h1>
+
+        <input
+          type='text'
+          className='app-input'
+          placeholder='Game title (optional)'
+          {...register('gameTitle')}
+        />
 
         <input type='date' className='app-input' {...register('playedAt', { required: true })} />
 

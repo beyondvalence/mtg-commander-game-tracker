@@ -222,4 +222,91 @@ body {
   .commander-stage-card.filled {
     color: transparent;
   }
+
+  .history-player-card {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--app-panel-soft) 92%, transparent), color-mix(in srgb, var(--app-panel) 94%, transparent));
+  }
+
+  .history-commander-pair {
+    @apply flex flex-shrink-0 items-start gap-2 self-center;
+  }
+
+  .history-commander-pair.has-secondary {
+    @apply gap-2;
+  }
+
+  .history-commander-frame {
+    @apply flex items-center justify-center overflow-hidden rounded-xl border p-2;
+    width: 6.25rem;
+    aspect-ratio: 63 / 88;
+    background:
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 38%),
+      var(--app-panel);
+    border-color: var(--app-border);
+    box-shadow: var(--app-shadow);
+  }
+
+  .history-commander-thumb {
+    @apply h-full w-full rounded-lg object-contain;
+  }
+
+  .history-commander-thumb.placeholder {
+    @apply flex items-center justify-center px-2 text-center text-[0.65rem] font-semibold uppercase tracking-[0.2em];
+    color: var(--app-muted);
+  }
+
+  .player-tile {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--app-panel) 94%, transparent), var(--app-panel)),
+      var(--app-panel);
+  }
+
+  .player-tile-art {
+    @apply relative mb-5 overflow-hidden rounded-[1.5rem] border;
+    height: 12rem;
+    background:
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 40%),
+      linear-gradient(135deg, var(--app-panel-soft), color-mix(in srgb, var(--app-panel) 86%, transparent));
+    border-color: var(--app-border);
+  }
+
+  .player-tile-art-card {
+    @apply absolute flex items-center justify-center overflow-hidden rounded-2xl border p-2;
+    width: 7rem;
+    height: 9.75rem;
+    background:
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 38%),
+      var(--app-panel);
+    border-color: var(--app-border);
+    box-shadow: var(--app-shadow);
+  }
+
+  .player-tile-art-card span {
+    @apply flex h-full items-center justify-center px-3 text-center text-xs font-semibold uppercase tracking-[0.18em];
+    color: var(--app-muted);
+  }
+
+  .player-tile-art-image {
+    @apply h-full w-full rounded-xl object-contain;
+  }
+
+  .player-tile-art-card.card-1 {
+    left: 0.9rem;
+    top: 1.1rem;
+    transform: rotate(-8deg);
+  }
+
+  .player-tile-art-card.card-2 {
+    left: 4.45rem;
+    top: 0.8rem;
+    z-index: 2;
+  }
+
+  .player-tile-art-card.card-3 {
+    right: 0.9rem;
+    top: 1.1rem;
+    transform: rotate(8deg);
+  }
+
 }

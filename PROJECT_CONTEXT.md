@@ -4,21 +4,24 @@
 
 - The app is a no-login MTG Commander tracker backed directly by a live Supabase project.
 - Navigation uses a left sidebar with a persisted light/dark theme toggle.
-- The dashboard and history pages read live data from Supabase through `src/lib/gameRecords.ts`.
-- The Add Game page supports multi-seat entry, renders four-player pods in a 2x2 grid, and now supports two-card commander setups.
-- Each player seat includes commander art placeholders, with stacked hoverable art for partner and background pairings.
+- The dashboard, history, and players pages all read live data from Supabase through `src/lib/gameRecords.ts`.
+- The Add Game page supports multi-seat entry, optional game titles, and two-card commander setups for partner/background-style pairings.
+- The Game History page supports inline title editing, player-name filtering, and per-seat commander thumbnails.
+- The Players page now renders one tile per unique player with search by player name or commander name.
 
 ## Recent Work
 
-- Added commander image placeholders and staggered two-card art stacks on the Add Game page.
-- Added secondary commander selection and persistence for partner-style pairs and commander-plus-background pairings.
-- Improved Scryfall parsing so cards with face-based image data still render commander art correctly.
-- Seeded the connected Supabase project with 3 sample games for dashboard and history testing.
-- Fixed the `enforce_game_winner_consistency()` trigger so `games` inserts resolve the correct game id.
-- Fixed the dashboard/history Supabase read to explicitly use `game_participants!game_participants_game_id_fkey`, avoiding PostgREST ambiguity after `winner_participant_id` was added.
+- Added optional `games.title` support to the schema, Add Game flow, and Game History page.
+- Seeded the live Supabase project with 3 additional four-player sample games using real Scryfall commander metadata.
+- Added `scripts/seedSampleGames.mjs` for repeatable sample data inserts.
+- Added `scripts/backfillCommanderImages.mjs` and repaired missing commander art in the live project.
+- Reworked Game History to show each game's players in a 2x2 grid for four-player pods, with right-aligned commander thumbnails and a player filter.
+- Replaced the Players placeholder page with searchable live player tiles and commander art summaries.
+- Removed the extra top-level “connected Supabase project” banner from the main layout.
 
 ## Recent Commits
 
+- `ef99e0e` - `Add commander card previews and refresh project context`
 - `ac29db7` - `Add sidebar theme toggle and live game tracking UI`
 - `a504d6d` - `Convert tracker to no-login Supabase app`
 - `cabf2a0` - `Add game save flow and upgrade Vite tooling`
@@ -26,35 +29,45 @@
 ## Key Files
 
 - `src/pages/AddGamePage.tsx`
-  Multi-seat game entry, secondary commander logic, and save flow.
-- `src/components/CommanderAutocomplete.tsx`
-  Commander/background autocomplete behavior and controlled input state.
-- `src/lib/scryfall.ts`
-  Scryfall search helpers and card-to-app mapping.
+  Multi-seat game entry, title capture, secondary commander logic, and save flow.
+- `src/pages/GameHistoryPage.tsx`
+  History list, inline title editing, player filtering, and per-seat commander thumbnails.
+- `src/pages/PlayersPage.tsx`
+  Searchable player directory with per-player commander tiles and summary stats.
 - `src/lib/gameRecords.ts`
-  Shared Supabase reads for dashboard and history.
+  Shared Supabase reads plus numbered game and player-directory aggregation helpers.
 - `src/index.css`
-  Theme variables plus commander placeholder/card-stack styling.
+  Theme variables plus commander layout styling for add-game, history, and player tiles.
 - `schema.sql`
-  Current Supabase schema, including winner consistency trigger logic.
+  Current Supabase schema, including `games.title` and winner consistency trigger logic.
+- `scripts/seedSampleGames.mjs`
+  Live sample-game seed script.
+- `scripts/backfillCommanderImages.mjs`
+  Live repair script for missing commander image URLs.
 
 ## Live Data Snapshot
 
-- The connected Supabase project currently contains 3 sample games and 11 participant rows.
-- Sample data includes both 3-player and 4-player games.
-- Sample data includes a partner pairing so the two-card commander UI can be exercised immediately.
+- The connected Supabase project currently contains 6 games, 23 participant rows, 21 commanders, and 19 players.
+- 5 saved games are four-player pods.
+- 3 saved games include a secondary commander pairing.
+- Live commander image backfill has been completed, and saved game participants currently resolve commander artwork successfully.
 
 ## Validation Status
 
 - `npm test -- --run` passes with the current worktree.
 - `npm run build` passes with the current worktree.
-- The live dashboard query was rechecked against Supabase and returns game rows successfully.
+- Live Supabase reads were rechecked for counts and game composition after the latest history/player-page work.
 
 ## Known Caveats
 
 - The current no-login Supabase setup still exposes app data broadly through public client access and permissive RLS policies.
 - Game creation still happens as multiple client-side writes rather than a single transactional RPC.
-- Sample data was inserted directly into the linked live Supabase project rather than through a reusable seed script.
+- The live database currently contains historical commander rows with placeholder `scryfall_id` values, even though missing artwork has been repaired.
+
+## TODO Notes
+
+- Add bracket tracking for games.
+- Add a game-service field or selector for `paper`, `Convoke`, or `Spelltable`.
 
 ## Ignored Local Files
 

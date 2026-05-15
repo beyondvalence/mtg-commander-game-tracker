@@ -154,12 +154,6 @@ export function Layout() {
       </aside>
 
       <main className='flex min-w-0 flex-1 flex-col gap-6'>
-        <div className='wireframe-shell'>
-          <p className='wireframe-copy app-muted'>
-            This tracker saves directly to your connected Supabase project without an in-app login.
-          </p>
-        </div>
-
         <Outlet />
       </main>
     </div>

@@ -1,15 +1,38 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { CommanderAutocomplete } from '../components/CommanderAutocomplete';
 import { supabase } from '../lib/supabase';
-import type { CommanderCard, ParticipantInput } from '../types/app';
+import type { ParticipantInput } from '../types/app';
 
 type AddGameFormValues = {
   playedAt: string;
   playersCount: string;
   winCondition: string;
 };
+
+function createParticipantSeat(seat: number): ParticipantInput {
+  return {
+    seat,
+    playerName: '',
+    primary: null,
+    isWinner: seat === 1,
+  };
+}
+
+function syncParticipantsToPlayerCount(participants: ParticipantInput[], playersCount: number) {
+  const nextParticipants = Array.from({ length: playersCount }, (_, index) => {
+    const seat = index + 1;
+    return participants.find((participant) => participant.seat === seat) ?? createParticipantSeat(seat);
+  });
+
+  const winnerStillVisible = nextParticipants.some((participant) => participant.isWinner);
+  if (!winnerStillVisible && nextParticipants.length > 0) {
+    nextParticipants[0] = { ...nextParticipants[0], isWinner: true };
+  }
+
+  return nextParticipants;
+}
 
 export default function AddGamePage() {
   const { register, handleSubmit, watch } = useForm<AddGameFormValues>({
@@ -20,55 +43,55 @@ export default function AddGamePage() {
     },
   });
   const navigate = useNavigate();
-  const [participants, setParticipants] = useState<ParticipantInput[]>([]);
-  const [playerName, setPlayerName] = useState('');
-  const [selectedSeat, setSelectedSeat] = useState('1');
-  const [selectedCommander, setSelectedCommander] = useState<CommanderCard | null>(null);
+  const [participants, setParticipants] = useState<ParticipantInput[]>(() => Array.from({ length: 4 }, (_, index) => createParticipantSeat(index + 1)));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const playersCount = parseInt(watch('playersCount') || '4', 10);
-  const availableSeats = useMemo(() => {
-    const takenSeats = new Set(participants.map((participant) => participant.seat));
-    return Array.from({ length: playersCount }, (_, idx) => idx + 1).filter((seat) => !takenSeats.has(seat));
-  }, [participants, playersCount]);
-  const sortedParticipants = [...participants].sort((a, b) => a.seat - b.seat);
 
-  const handleAddParticipant = () => {
-    if (!selectedCommander || !playerName.trim()) {
-      setError('Please enter a player name and select a commander');
-      return;
-    }
+  useEffect(() => {
+    setParticipants((currentParticipants) => syncParticipantsToPlayerCount(currentParticipants, playersCount));
+  }, [playersCount]);
 
-    const seat = parseInt(selectedSeat, 10);
-    if (!availableSeats.includes(seat)) {
-      setError('Please choose an available turn order position');
-      return;
-    }
+  const hasIncompleteSeat = participants.some((participant) => !participant.playerName.trim() || !participant.primary);
 
-    const newParticipant: ParticipantInput = {
-      seat,
-      playerName: playerName.trim(),
-      primary: selectedCommander,
-      isWinner: participants.length === 0,
-    };
+  const handlePlayerNameChange = (seat: number, playerName: string) => {
+    setParticipants((currentParticipants) =>
+      currentParticipants.map((participant) =>
+        participant.seat === seat
+          ? {
+              ...participant,
+              playerName,
+            }
+          : participant,
+      ),
+    );
+  };
 
-    setParticipants((currentParticipants) => [...currentParticipants, newParticipant]);
-    setPlayerName('');
-    setSelectedCommander(null);
-    setSelectedSeat(String(availableSeats.find((candidateSeat) => candidateSeat !== seat) ?? seat));
+  const handleCommanderChange = (seat: number, primary: ParticipantInput['primary']) => {
+    setParticipants((currentParticipants) =>
+      currentParticipants.map((participant) =>
+        participant.seat === seat
+          ? {
+              ...participant,
+              primary,
+            }
+          : participant,
+      ),
+    );
     setError(null);
   };
 
-  const handleRemoveParticipant = (seat: number) => {
-    setParticipants((currentParticipants) => {
-      const nextParticipants = currentParticipants.filter((participant) => participant.seat !== seat);
-
-      if (nextParticipants.length > 0 && !nextParticipants.some((participant) => participant.isWinner)) {
-        nextParticipants[0] = { ...nextParticipants[0], isWinner: true };
-      }
-
-      return nextParticipants;
-    });
+  const handleCommanderClear = (seat: number) => {
+    setParticipants((currentParticipants) =>
+      currentParticipants.map((participant) =>
+        participant.seat === seat
+          ? {
+              ...participant,
+              primary: null,
+            }
+          : participant,
+      ),
+    );
   };
 
   const handleWinnerChange = (seat: number) => {
@@ -85,8 +108,8 @@ export default function AddGamePage() {
       setIsLoading(true);
       setError(null);
 
-      if (participants.length !== parseInt(formData.playersCount, 10)) {
-        throw new Error(`Please add exactly ${formData.playersCount} participants before saving`);
+      if (participants.some((participant) => !participant.playerName.trim() || !participant.primary)) {
+        throw new Error('Please complete every player card with a name and commander before saving');
       }
 
       const winner = participants.find((participant) => participant.isWinner);
@@ -103,7 +126,7 @@ export default function AddGamePage() {
 
       for (const participant of participants) {
         if (!participant.primary) {
-          throw new Error(`Participant "${participant.playerName}" is missing a commander`);
+          throw new Error(`Seat ${participant.seat} is missing a commander`);
         }
 
         const { data: commanderData, error: commanderError } = await supabase
@@ -128,7 +151,7 @@ export default function AddGamePage() {
           .from('players')
           .upsert(
             {
-              name: participant.playerName,
+              name: participant.playerName.trim(),
             },
             { onConflict: 'name' },
           )
@@ -206,19 +229,20 @@ export default function AddGamePage() {
 
   return (
     <section className='wireframe-shell'>
-      <form className='mx-auto flex w-full max-w-3xl flex-col items-center space-y-4 text-center' onSubmit={handleSubmit(handleSaveGame)}>
+      <form className='mx-auto flex w-full max-w-5xl flex-col items-center space-y-4 text-center' onSubmit={handleSubmit(handleSaveGame)}>
         <h1 className='wireframe-title'>Add Game</h1>
 
-        <input type='date' className='w-full rounded-xl border border-zinc-500 bg-zinc-50 p-3 text-xl' {...register('playedAt', { required: true })} />
+        <input type='date' className='app-input' {...register('playedAt', { required: true })} />
 
         <input
           type='number'
           min={2}
-          className='w-full rounded-xl border border-zinc-500 bg-zinc-50 p-3 text-xl'
-          {...register('playersCount', { required: true, min: 2 })}
+          max={4}
+          className='app-input'
+          {...register('playersCount', { required: true, min: 2, max: 4 })}
         />
 
-        <select className='w-full rounded-xl border border-zinc-500 bg-zinc-50 p-3 text-xl' {...register('winCondition', { required: true })}>
+        <select className='app-input' {...register('winCondition', { required: true })}>
           <option value=''>Select win condition</option>
           <option value='Combat'>Combat</option>
           <option value='Combo'>Combo</option>
@@ -226,89 +250,75 @@ export default function AddGamePage() {
           <option value='Other'>Other</option>
         </select>
 
-        <div className='w-full space-y-3 rounded-xl border border-zinc-300 bg-zinc-50 p-4'>
-          <h2 className='text-lg font-semibold'>Add Participants ({participants.length}/{playersCount})</h2>
-
-          <div className='space-y-2'>
-            <input
-              type='text'
-              value={playerName}
-              onChange={(event) => setPlayerName(event.target.value)}
-              placeholder='Player name'
-              className='w-full rounded-lg border border-zinc-500 bg-white p-2 text-lg'
-            />
-
-            <select
-              value={selectedSeat}
-              onChange={(event) => setSelectedSeat(event.target.value)}
-              className='w-full rounded-lg border border-zinc-500 bg-white p-2 text-lg'
-            >
-              {availableSeats.map((seat) => (
-                <option key={seat} value={seat}>
-                  Turn order: {seat}
-                </option>
-              ))}
-            </select>
-
-            <div className='w-full'>
-              <CommanderAutocomplete onSelect={(commander) => setSelectedCommander(commander)} />
+        <div className='w-full space-y-4 text-left'>
+          <div className='flex flex-wrap items-end justify-between gap-3'>
+            <div>
+              <h2 className='text-2xl font-semibold'>Player Grid</h2>
+              <p className='app-muted text-sm'>Fill out each seat directly here. With four players, the seats display in a 2x2 grid.</p>
             </div>
+            <p className='app-chip'>{playersCount} seats active</p>
+          </div>
 
-            {selectedCommander && (
-              <div className='rounded-lg bg-white p-2 text-left text-sm'>
-                <strong>Selected:</strong> {selectedCommander.name}
+          <div className='grid gap-4 md:grid-cols-2'>
+            {participants.map((participant) => (
+              <div key={participant.seat} className='app-card space-y-4'>
+                <div className='flex items-start justify-between gap-3'>
+                  <div>
+                    <p className='app-muted text-xs font-bold uppercase tracking-[0.25em]'>Seat {participant.seat}</p>
+                    <h3 className='text-xl font-semibold'>Player {participant.seat}</h3>
+                  </div>
+
+                  <label className='app-muted flex items-center gap-2 text-sm font-semibold'>
+                    <input
+                      type='radio'
+                      name='winner'
+                      checked={Boolean(participant.isWinner)}
+                      onChange={() => handleWinnerChange(participant.seat)}
+                    />
+                    Winner
+                  </label>
+                </div>
+
+                <input
+                  type='text'
+                  value={participant.playerName}
+                  onChange={(event) => handlePlayerNameChange(participant.seat, event.target.value)}
+                  placeholder={`Seat ${participant.seat} player name`}
+                  className='app-input-compact'
+                />
+
+                <div className='space-y-2'>
+                  <CommanderAutocomplete onSelect={(commander) => handleCommanderChange(participant.seat, commander)} />
+
+                  {participant.primary ? (
+                    <div className='app-card-soft flex items-center justify-between gap-3 px-3 py-2 text-sm'>
+                      <p>
+                        <strong>Commander:</strong> {participant.primary.name}
+                      </p>
+                      <button
+                        type='button'
+                        className='font-semibold text-red-600 hover:text-red-800'
+                        onClick={() => handleCommanderClear(participant.seat)}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  ) : (
+                    <p className='app-muted text-sm'>Choose a commander for this seat.</p>
+                  )}
+                </div>
               </div>
-            )}
-
-            <button
-              type='button'
-              disabled={availableSeats.length === 0}
-              className='w-full rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50'
-              onClick={handleAddParticipant}
-            >
-              Add Participant
-            </button>
+            ))}
           </div>
 
           {error && <p className='text-sm text-red-600'>{error}</p>}
         </div>
 
-        {participants.length > 0 && (
-          <div className='w-full rounded-xl border border-zinc-500 p-4 text-left'>
-            <p className='mb-3 text-xl font-semibold'>Participants ({participants.length})</p>
-            <ul className='space-y-2'>
-              {sortedParticipants.map((participant) => (
-                <li key={`${participant.playerName}-${participant.seat}`} className='flex items-center justify-between rounded-lg bg-zinc-100 p-2'>
-                  <div className='space-y-1'>
-                    <p className='font-semibold'>Seat {participant.seat}: {participant.playerName}</p>
-                    <p className='text-sm text-zinc-600'>{participant.primary?.name ?? 'No commander selected'}</p>
-                    <label className='flex items-center gap-2 text-sm text-zinc-700'>
-                      <input
-                        type='radio'
-                        name='winner'
-                        checked={Boolean(participant.isWinner)}
-                        onChange={() => handleWinnerChange(participant.seat)}
-                      />
-                      Winner
-                    </label>
-                  </div>
-                  <button
-                    type='button'
-                    onClick={() => handleRemoveParticipant(participant.seat)}
-                    className='font-semibold text-red-600 hover:text-red-800'
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         <button
           type='submit'
-          disabled={isLoading || participants.length === 0}
-          className='rounded-full border border-zinc-500 bg-zinc-900 px-8 py-3 text-2xl text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50'
+          disabled={isLoading || hasIncompleteSeat}
+          className='rounded-full border px-8 py-3 text-2xl font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50'
+          style={{ background: '#18181b', borderColor: 'var(--app-border)' }}
         >
           {isLoading ? 'Saving...' : 'Save Game'}
         </button>

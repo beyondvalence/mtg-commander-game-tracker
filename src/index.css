@@ -2,14 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+  --app-bg: #d4d4d8;
+  --app-bg-accent: #f4f4f5;
+  --app-text: #18181b;
+  --app-muted: #52525b;
+  --app-border: #52525b;
+  --app-shell: rgba(244, 244, 245, 0.88);
+  --app-panel: #ffffff;
+  --app-panel-soft: #f4f4f5;
+  --app-panel-strong: #e4e4e7;
+  --app-hover: #e4e4e7;
+  --app-shadow: 0 20px 50px rgba(24, 24, 27, 0.08);
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --app-bg: #09090b;
+  --app-bg-accent: #18181b;
+  --app-text: #f4f4f5;
+  --app-muted: #a1a1aa;
+  --app-border: #3f3f46;
+  --app-shell: rgba(24, 24, 27, 0.92);
+  --app-panel: #18181b;
+  --app-panel-soft: #27272a;
+  --app-panel-strong: #3f3f46;
+  --app-hover: #3f3f46;
+  --app-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
 body {
-  @apply bg-zinc-200 text-zinc-900;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.12), transparent 32%),
+    linear-gradient(135deg, var(--app-bg), var(--app-bg-accent));
+  color: var(--app-text);
   font-family: "Inter", "Segoe UI", sans-serif;
+  transition: background 220ms ease, color 220ms ease;
 }
 
 @layer components {
   .wireframe-shell {
-    @apply mx-auto w-full max-w-[1400px] rounded-[2rem] border border-zinc-600 bg-zinc-100 px-6 py-8 md:px-10;
+    @apply w-full rounded-[2rem] border px-6 py-8 md:px-10;
+    background: var(--app-shell);
+    border-color: var(--app-border);
+    box-shadow: var(--app-shadow);
+    backdrop-filter: blur(18px);
   }
 
   .wireframe-page {
@@ -22,5 +61,111 @@ body {
 
   .wireframe-copy {
     @apply text-xl leading-relaxed md:text-3xl;
+  }
+
+  .app-sidebar {
+    @apply flex h-full flex-col gap-5 rounded-[2rem] border p-5 md:p-6;
+    background: linear-gradient(180deg, var(--app-shell), var(--app-panel-soft));
+    border-color: var(--app-border);
+    box-shadow: var(--app-shadow);
+    backdrop-filter: blur(18px);
+  }
+
+  .app-card {
+    @apply rounded-xl border p-4;
+    background: var(--app-panel);
+    border-color: var(--app-border);
+  }
+
+  .app-card-soft {
+    @apply rounded-lg;
+    background: var(--app-panel-soft);
+  }
+
+  .app-chip {
+    @apply rounded-full px-3 py-1 text-sm font-medium;
+    background: var(--app-panel-soft);
+    color: var(--app-muted);
+  }
+
+  .app-muted {
+    color: var(--app-muted);
+  }
+
+  .app-input {
+    @apply w-full rounded-xl border p-3 text-xl outline-none transition;
+    background: var(--app-panel-soft);
+    border-color: var(--app-border);
+    color: var(--app-text);
+  }
+
+  .app-input::placeholder {
+    color: var(--app-muted);
+  }
+
+  .app-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  }
+
+  .app-input-compact {
+    @apply w-full rounded-lg border p-2 text-lg outline-none transition;
+    background: var(--app-panel);
+    border-color: var(--app-border);
+    color: var(--app-text);
+  }
+
+  .app-input-compact::placeholder {
+    color: var(--app-muted);
+  }
+
+  .app-input-compact:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  }
+
+  .app-navlink {
+    @apply flex items-center gap-3 rounded-2xl border px-4 py-3 text-base font-semibold transition;
+    background: transparent;
+    border-color: transparent;
+    color: var(--app-muted);
+  }
+
+  .app-navlink:hover {
+    background: var(--app-panel-soft);
+    color: var(--app-text);
+  }
+
+  .app-navlink-active {
+    background: var(--app-panel);
+    border-color: var(--app-border);
+    color: var(--app-text);
+    box-shadow: var(--app-shadow);
+  }
+
+  .theme-toggle-button {
+    @apply flex h-12 w-12 items-center justify-center rounded-2xl border transition;
+    background: var(--app-panel);
+    border-color: var(--app-border);
+    color: var(--app-text);
+  }
+
+  .theme-toggle-button:hover {
+    background: var(--app-hover);
+  }
+
+  .theme-option {
+    @apply flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-semibold transition;
+    color: var(--app-muted);
+  }
+
+  .theme-option:hover {
+    background: var(--app-panel-soft);
+    color: var(--app-text);
+  }
+
+  .theme-option-active {
+    background: var(--app-panel);
+    color: var(--app-text);
   }
 }

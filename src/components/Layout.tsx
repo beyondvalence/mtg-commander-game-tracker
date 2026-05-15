@@ -1,35 +1,167 @@
-import { Link, Outlet } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { NavLink, Outlet } from 'react-router-dom';
+
+const THEME_STORAGE_KEY = 'mtg-commander-theme';
+
+type ThemeMode = 'light' | 'dark';
 
 const links = [
-  { to: '/', label: 'Home' },
-  { to: '/add-game', label: 'Add Game' },
-  { to: '/history', label: 'History' },
-  { to: '/commanders', label: 'Commanders' },
-  { to: '/players', label: 'Players' },
+  { to: '/', label: 'Home', shortLabel: 'HM' },
+  { to: '/add-game', label: 'Add Game', shortLabel: 'AG' },
+  { to: '/history', label: 'History', shortLabel: 'HI' },
+  { to: '/commanders', label: 'Commanders', shortLabel: 'CM' },
+  { to: '/players', label: 'Players', shortLabel: 'PL' },
 ];
 
-export function Layout() {
+function applyTheme(theme: ThemeMode) {
+  document.documentElement.setAttribute('data-theme', theme);
+}
+
+function resolveInitialTheme(): ThemeMode {
+  const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (savedTheme === 'light' || savedTheme === 'dark') {
+    return savedTheme;
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function ThemeIcon({ theme }: { theme: ThemeMode }) {
+  if (theme === 'dark') {
+    return (
+      <svg viewBox='0 0 24 24' className='h-5 w-5' fill='none' stroke='currentColor' strokeWidth='1.8' aria-hidden='true'>
+        <path d='M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z' />
+      </svg>
+    );
+  }
+
   return (
-    <div className='mx-auto w-full max-w-[1500px] space-y-6 px-4 py-6 md:px-8'>
-      <nav className='wireframe-shell flex flex-wrap items-center justify-center gap-3 text-xl font-semibold md:text-3xl'>
-        {links.map((link) => (
-          <Link
-            key={link.to}
-            to={link.to}
-            className='rounded-full border border-zinc-500 px-5 py-2 transition hover:bg-zinc-200'
-          >
-            {link.label}
-          </Link>
-        ))}
-      </nav>
+    <svg viewBox='0 0 24 24' className='h-5 w-5' fill='none' stroke='currentColor' strokeWidth='1.8' aria-hidden='true'>
+      <circle cx='12' cy='12' r='4.5' />
+      <path d='M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3' />
+    </svg>
+  );
+}
 
-      <div className='wireframe-shell'>
-        <p className='wireframe-copy text-zinc-700'>
-          This tracker saves directly to your connected Supabase project without an in-app login.
-        </p>
-      </div>
+export function Layout() {
+  const [theme, setTheme] = useState<ThemeMode>('light');
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
-      <Outlet />
+  useEffect(() => {
+    const initialTheme = resolveInitialTheme();
+    setTheme(initialTheme);
+    applyTheme(initialTheme);
+    setIsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+
+    applyTheme(theme);
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [isReady, theme]);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('[data-theme-menu-root]')) {
+        setThemeMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, []);
+
+  const themeLabel = useMemo(() => (theme === 'dark' ? 'Dark mode' : 'Light mode'), [theme]);
+
+  return (
+    <div className='mx-auto flex min-h-screen w-full max-w-[1550px] flex-col gap-4 px-4 py-4 md:flex-row md:gap-6 md:px-6 md:py-6'>
+      <aside className='app-sidebar md:sticky md:top-6 md:h-[calc(100vh-3rem)] md:w-[280px] md:min-w-[280px]'>
+        <div className='space-y-2'>
+          <p className='text-xs font-bold uppercase tracking-[0.3em] app-muted'>Commander Tracker</p>
+          <h1 className='text-3xl font-black tracking-tight'>Table Log</h1>
+          <p className='text-sm leading-relaxed app-muted'>
+            Track every pod, every winner, and every commander straight from your connected Supabase project.
+          </p>
+        </div>
+
+        <nav className='flex flex-1 flex-col gap-2'>
+          {links.map((link) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              className={({ isActive }) => `app-navlink ${isActive ? 'app-navlink-active' : ''}`}
+            >
+              <span className='flex h-9 w-9 items-center justify-center rounded-xl app-card-soft text-xs font-black tracking-[0.2em]'>
+                {link.shortLabel}
+              </span>
+              <span>{link.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className='mt-auto flex items-end justify-between gap-3' data-theme-menu-root>
+          <div>
+            <p className='text-xs font-bold uppercase tracking-[0.25em] app-muted'>Theme</p>
+            <p className='text-sm font-semibold'>{themeLabel}</p>
+          </div>
+
+          <div className='relative'>
+            <button
+              type='button'
+              className='theme-toggle-button'
+              aria-label='Open theme selector'
+              aria-expanded={themeMenuOpen}
+              onClick={() => setThemeMenuOpen((open) => !open)}
+            >
+              <ThemeIcon theme={theme} />
+            </button>
+
+            {themeMenuOpen && (
+              <div className='absolute bottom-14 right-0 z-30 w-44 rounded-[1.5rem] border p-2 app-card'>
+                <button
+                  type='button'
+                  className={`theme-option ${theme === 'light' ? 'theme-option-active' : ''}`}
+                  onClick={() => {
+                    setTheme('light');
+                    setThemeMenuOpen(false);
+                  }}
+                >
+                  <span>Light</span>
+                  {theme === 'light' && <span>•</span>}
+                </button>
+                <button
+                  type='button'
+                  className={`theme-option ${theme === 'dark' ? 'theme-option-active' : ''}`}
+                  onClick={() => {
+                    setTheme('dark');
+                    setThemeMenuOpen(false);
+                  }}
+                >
+                  <span>Dark</span>
+                  {theme === 'dark' && <span>•</span>}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      <main className='flex min-w-0 flex-1 flex-col gap-6'>
+        <div className='wireframe-shell'>
+          <p className='wireframe-copy app-muted'>
+            This tracker saves directly to your connected Supabase project without an in-app login.
+          </p>
+        </div>
+
+        <Outlet />
+      </main>
     </div>
   );
 }

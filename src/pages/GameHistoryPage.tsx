@@ -1,32 +1,14 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { fetchNumberedGames, readSingleName, type NumberedHistoryGame } from '../lib/gameRecords';
 
-type HistoryGameParticipant = {
-  id: string;
-  turn_order_position: number;
-  is_winner: boolean;
-  player: { name: string } | { name: string }[] | null;
-  primary_commander: { name: string } | { name: string }[] | null;
-};
-
-type HistoryGame = {
-  id: string;
-  played_at: string;
-  number_of_players: number;
-  win_condition: string;
-  game_participants: HistoryGameParticipant[];
-};
-
-function readSingleName(value: { name: string } | { name: string }[] | null) {
-  if (Array.isArray(value)) {
-    return value[0]?.name ?? 'Unknown';
-  }
-
-  return value?.name ?? 'Unknown';
+function formatPlayedAt(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+  }).format(new Date(`${value}T00:00:00`));
 }
 
 export default function GameHistoryPage() {
-  const [games, setGames] = useState<HistoryGame[]>([]);
+  const [games, setGames] = useState<NumberedHistoryGame[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,31 +20,9 @@ export default function GameHistoryPage() {
         setIsLoading(true);
         setError(null);
 
-        const { data, error: fetchError } = await supabase
-          .from('games')
-          .select(`
-            id,
-            played_at,
-            number_of_players,
-            win_condition,
-            game_participants (
-              id,
-              turn_order_position,
-              is_winner,
-              player:players (
-                name
-              ),
-              primary_commander:commanders!game_participants_primary_commander_id_fkey (
-                name
-              )
-            )
-          `)
-          .order('played_at', { ascending: false });
-
-        if (fetchError) throw fetchError;
-
+        const nextGames = await fetchNumberedGames();
         if (isMounted) {
-          setGames((data as HistoryGame[]) || []);
+          setGames(nextGames);
         }
       } catch (err) {
         if (isMounted) {
@@ -86,7 +46,7 @@ export default function GameHistoryPage() {
     <section className='wireframe-shell space-y-4'>
       <div className='space-y-1 text-left'>
         <h1 className='wireframe-title'>Game History</h1>
-        <p className='wireframe-copy text-zinc-700'>Saved commander games appear here after they are written to Supabase.</p>
+        <p className='wireframe-copy app-muted'>Every saved game is numbered from oldest to newest, then listed here with its players and winner.</p>
       </div>
 
       {isLoading && <p className='wireframe-copy'>Loading games...</p>}
@@ -99,13 +59,17 @@ export default function GameHistoryPage() {
       {!isLoading && !error && games.length > 0 && (
         <div className='space-y-4'>
           {games.map((game) => (
-            <article key={game.id} className='rounded-xl border border-zinc-400 bg-white p-4 text-left'>
-              <div className='flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-3'>
+            <article key={game.id} className='app-card text-left'>
+              <div className='flex flex-wrap items-center justify-between gap-3 border-b pb-3' style={{ borderColor: 'var(--app-panel-strong)' }}>
                 <div>
-                  <p className='text-lg font-semibold text-zinc-900'>{game.played_at}</p>
-                  <p className='text-sm text-zinc-600'>
+                  <p className='app-muted text-sm font-semibold uppercase tracking-[0.2em]'>Game #{game.gameNumber}</p>
+                  <p className='text-lg font-semibold'>{formatPlayedAt(game.played_at)}</p>
+                  <p className='app-muted text-sm'>
                     {game.number_of_players} players · {game.win_condition}
                   </p>
+                </div>
+                <div className='app-chip'>
+                  {game.game_participants.filter((participant) => participant.is_winner).length === 1 ? 'Winner locked in' : 'Winner missing'}
                 </div>
               </div>
 
@@ -113,12 +77,12 @@ export default function GameHistoryPage() {
                 {[...game.game_participants]
                   .sort((a, b) => a.turn_order_position - b.turn_order_position)
                   .map((participant) => (
-                    <li key={participant.id} className='flex items-center justify-between rounded-lg bg-zinc-100 px-3 py-2'>
+                    <li key={participant.id} className='app-card-soft flex items-center justify-between px-3 py-2'>
                       <div>
-                        <p className='font-medium text-zinc-900'>
+                        <p className='font-medium'>
                           Seat {participant.turn_order_position}: {readSingleName(participant.player)}
                         </p>
-                        <p className='text-sm text-zinc-600'>{readSingleName(participant.primary_commander)}</p>
+                        <p className='app-muted text-sm'>{readSingleName(participant.primary_commander)}</p>
                       </div>
                       {participant.is_winner && (
                         <span className='rounded-full border border-emerald-700 px-3 py-1 text-sm font-semibold text-emerald-700'>
@@ -128,6 +92,8 @@ export default function GameHistoryPage() {
                     </li>
                   ))}
               </ul>
+
+              {game.notes && <p className='app-card-soft app-muted mt-4 px-3 py-2 text-sm'>{game.notes}</p>}
             </article>
           ))}
         </div>

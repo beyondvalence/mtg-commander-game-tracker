@@ -21,7 +21,7 @@ export function CommanderAutocomplete({ onSelect }: { onSelect: (c: CommanderCar
   return (
     <div className='relative'>
       <input
-        className='border p-2 w-full'
+        className='app-input-compact'
         value={q}
         onFocus={() => setIsOpen(true)}
         onBlur={() => setTimeout(() => setIsOpen(false), 120)}
@@ -43,12 +43,12 @@ export function CommanderAutocomplete({ onSelect }: { onSelect: (c: CommanderCar
       {b && <p className='text-xs text-amber-600'>Broadened results</p>}
 
       {showResults && (
-        <div className='absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded border bg-white shadow'>
+        <div className='app-card absolute z-20 mt-1 max-h-72 w-full overflow-auto shadow-xl'>
           {items.map((i) => (
             <button
               type='button'
               key={i.scryfallId}
-              className='flex w-full items-center gap-2 p-2 text-left hover:bg-slate-100'
+              className='flex w-full items-center gap-2 rounded-lg p-2 text-left transition hover:bg-[var(--app-panel-soft)]'
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 onSelect(i);

@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { CommanderAutocomplete } from '../components/CommanderAutocomplete';
 import { supabase } from '../lib/supabase';
+import type { CommanderCard } from '../types/app';
 import type { ParticipantInput } from '../types/app';
 
 type AddGameFormValues = {
@@ -32,6 +33,55 @@ function syncParticipantsToPlayerCount(participants: ParticipantInput[], players
   }
 
   return nextParticipants;
+}
+
+function includesRuleText(card: CommanderCard | null | undefined, text: string) {
+  return card?.oracleText?.toLowerCase().includes(text) ?? false;
+}
+
+function isBackgroundCard(card: CommanderCard | null | undefined) {
+  return card?.typeLine?.toLowerCase().includes('background') ?? false;
+}
+
+function getSecondaryMode(card: CommanderCard | null | undefined): 'commanders' | 'backgrounds' | null {
+  if (!card) {
+    return null;
+  }
+
+  if (isBackgroundCard(card)) {
+    return 'commanders';
+  }
+
+  if (includesRuleText(card, 'choose a background') || includesRuleText(card, 'create a character')) {
+    return 'backgrounds';
+  }
+
+  if (
+    includesRuleText(card, 'partner') ||
+    includesRuleText(card, 'friends forever') ||
+    includesRuleText(card, 'doctor\'s companion')
+  ) {
+    return 'commanders';
+  }
+
+  return null;
+}
+
+function isSecondarySelectionValid(primary: CommanderCard | null | undefined, secondary: CommanderCard | null | undefined) {
+  if (!secondary) {
+    return true;
+  }
+
+  const secondaryMode = getSecondaryMode(primary);
+  if (!secondaryMode) {
+    return false;
+  }
+
+  if (secondaryMode === 'backgrounds') {
+    return isBackgroundCard(secondary);
+  }
+
+  return !isBackgroundCard(secondary);
 }
 
 export default function AddGamePage() {
@@ -74,6 +124,7 @@ export default function AddGamePage() {
           ? {
               ...participant,
               primary,
+              secondary: isSecondarySelectionValid(primary, participant.secondary) ? participant.secondary ?? null : null,
             }
           : participant,
       ),
@@ -88,6 +139,34 @@ export default function AddGamePage() {
           ? {
               ...participant,
               primary: null,
+              secondary: null,
+            }
+          : participant,
+      ),
+    );
+  };
+
+  const handleSecondaryCommanderChange = (seat: number, secondary: ParticipantInput['secondary']) => {
+    setParticipants((currentParticipants) =>
+      currentParticipants.map((participant) =>
+        participant.seat === seat
+          ? {
+              ...participant,
+              secondary,
+            }
+          : participant,
+      ),
+    );
+    setError(null);
+  };
+
+  const handleSecondaryCommanderClear = (seat: number) => {
+    setParticipants((currentParticipants) =>
+      currentParticipants.map((participant) =>
+        participant.seat === seat
+          ? {
+              ...participant,
+              secondary: null,
             }
           : participant,
       ),
@@ -121,6 +200,7 @@ export default function AddGamePage() {
         seat: number;
         playerId: string;
         primaryCommanderId: string;
+        secondaryCommanderId: string | null;
         isWinner: boolean;
       }> = [];
 
@@ -147,6 +227,29 @@ export default function AddGamePage() {
 
         if (commanderError) throw commanderError;
 
+        let secondaryCommanderId: string | null = null;
+
+        if (participant.secondary) {
+          const { data: secondaryCommanderData, error: secondaryCommanderError } = await supabase
+            .from('commanders')
+            .upsert(
+              {
+                scryfall_id: participant.secondary.scryfallId,
+                name: participant.secondary.name,
+                image_url: participant.secondary.imageUrl,
+                color_identity: participant.secondary.colorIdentity || [],
+                type_line: participant.secondary.typeLine,
+                oracle_text: participant.secondary.oracleText,
+              },
+              { onConflict: 'scryfall_id' },
+            )
+            .select()
+            .single();
+
+          if (secondaryCommanderError) throw secondaryCommanderError;
+          secondaryCommanderId = secondaryCommanderData.id;
+        }
+
         const { data: playerData, error: playerError } = await supabase
           .from('players')
           .upsert(
@@ -164,6 +267,7 @@ export default function AddGamePage() {
           seat: participant.seat,
           playerId: playerData.id,
           primaryCommanderId: commanderData.id,
+          secondaryCommanderId,
           isWinner: participant.isWinner || false,
         });
       }
@@ -193,6 +297,7 @@ export default function AddGamePage() {
             game_id: gameData.id,
             player_id: participantRow.playerId,
             primary_commander_id: participantRow.primaryCommanderId,
+            secondary_commander_id: participantRow.secondaryCommanderId,
             turn_order_position: participantRow.seat,
             is_winner: participantRow.isWinner,
           })
@@ -287,8 +392,31 @@ export default function AddGamePage() {
                   className='app-input-compact'
                 />
 
+                <div className='commander-stage'>
+                  <div className={`commander-stage-stack${participant.secondary ? ' has-secondary' : ''}`}>
+                    <div
+                      className={`commander-stage-card primary${participant.primary?.imageUrl ? ' filled' : ''}`}
+                      style={participant.primary?.imageUrl ? { backgroundImage: `url(${participant.primary.imageUrl})` } : undefined}
+                    >
+                      {!participant.primary?.imageUrl && <span>Commander art</span>}
+                    </div>
+
+                    {(getSecondaryMode(participant.primary) || participant.secondary) && (
+                      <div
+                        className={`commander-stage-card secondary${participant.secondary?.imageUrl ? ' filled' : ''}`}
+                        style={participant.secondary?.imageUrl ? { backgroundImage: `url(${participant.secondary.imageUrl})` } : undefined}
+                      >
+                        {!participant.secondary?.imageUrl && <span>Second card</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className='space-y-2'>
-                  <CommanderAutocomplete onSelect={(commander) => handleCommanderChange(participant.seat, commander)} />
+                  <CommanderAutocomplete
+                    value={participant.primary?.name ?? ''}
+                    onSelect={(commander) => handleCommanderChange(participant.seat, commander)}
+                  />
 
                   {participant.primary ? (
                     <div className='app-card-soft flex items-center justify-between gap-3 px-3 py-2 text-sm'>
@@ -307,6 +435,38 @@ export default function AddGamePage() {
                     <p className='app-muted text-sm'>Choose a commander for this seat.</p>
                   )}
                 </div>
+
+                {getSecondaryMode(participant.primary) && (
+                  <div className='space-y-2'>
+                    <CommanderAutocomplete
+                      value={participant.secondary?.name ?? ''}
+                      searchMode={getSecondaryMode(participant.primary) ?? 'commanders'}
+                      placeholder={getSecondaryMode(participant.primary) === 'backgrounds' ? 'Search background' : 'Search second commander'}
+                      onSelect={(commander) => handleSecondaryCommanderChange(participant.seat, commander)}
+                    />
+
+                    {participant.secondary ? (
+                      <div className='app-card-soft flex items-center justify-between gap-3 px-3 py-2 text-sm'>
+                        <p>
+                          <strong>{getSecondaryMode(participant.primary) === 'backgrounds' ? 'Background:' : 'Second commander:'}</strong> {participant.secondary.name}
+                        </p>
+                        <button
+                          type='button'
+                          className='font-semibold text-red-600 hover:text-red-800'
+                          onClick={() => handleSecondaryCommanderClear(participant.seat)}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    ) : (
+                      <p className='app-muted text-sm'>
+                        {getSecondaryMode(participant.primary) === 'backgrounds'
+                          ? 'This commander can pair with a Background.'
+                          : 'This commander can pair with a second commander.'}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

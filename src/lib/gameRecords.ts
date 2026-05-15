@@ -69,7 +69,7 @@ export async function fetchNumberedGames() {
       number_of_players,
       win_condition,
       notes,
-      game_participants (
+      game_participants!game_participants_game_id_fkey (
         id,
         turn_order_position,
         is_winner,

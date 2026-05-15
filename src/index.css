@@ -168,4 +168,58 @@ body {
     background: var(--app-panel);
     color: var(--app-text);
   }
+
+  .commander-stage {
+    @apply flex justify-center rounded-[1.5rem] border p-4;
+    min-height: 13.5rem;
+    background:
+      linear-gradient(145deg, color-mix(in srgb, var(--app-panel-soft) 92%, transparent), color-mix(in srgb, var(--app-panel) 84%, transparent));
+    border-color: var(--app-border);
+  }
+
+  .commander-stage-stack {
+    @apply relative flex w-full max-w-[12rem] items-center justify-center;
+    min-height: 10.5rem;
+  }
+
+  .commander-stage-stack.has-secondary {
+    min-height: 12rem;
+  }
+
+  .commander-stage-card {
+    @apply absolute flex items-center justify-center overflow-hidden rounded-2xl border text-center text-xs font-semibold uppercase tracking-[0.25em];
+    width: 8.5rem;
+    height: 11.75rem;
+    background-color: var(--app-panel-strong);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    border-color: var(--app-border);
+    color: var(--app-muted);
+    box-shadow: var(--app-shadow);
+    transition: transform 180ms ease, box-shadow 180ms ease, z-index 180ms ease;
+  }
+
+  .commander-stage-card span {
+    @apply px-3;
+  }
+
+  .commander-stage-card.primary {
+    z-index: 2;
+    transform: translate(-0.55rem, -0.55rem);
+  }
+
+  .commander-stage-card.secondary {
+    z-index: 1;
+    transform: translate(0.75rem, 0.85rem);
+  }
+
+  .commander-stage-stack.has-secondary .commander-stage-card:hover {
+    z-index: 3;
+    transform: translate(0, 0) scale(1.02);
+  }
+
+  .commander-stage-card.filled {
+    color: transparent;
+  }
 }

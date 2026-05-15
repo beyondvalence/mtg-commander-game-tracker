@@ -1,20 +1,28 @@
-import { useMemo, useState } from 'react';
-import { searchCommanders } from '../lib/scryfall';
+import { useEffect, useMemo, useState } from 'react';
+import { searchBackgrounds, searchCommanders } from '../lib/scryfall';
+import type { CommanderCard } from '../types/app';
 
-type CommanderCard = {
-  scryfallId: string;
-  name: string;
-  imageUrl?: string;
-  colorIdentity?: string[];
-  typeLine?: string;
-  oracleText?: string;
+type CommanderAutocompleteProps = {
+  onSelect: (c: CommanderCard) => void;
+  placeholder?: string;
+  value?: string;
+  searchMode?: 'commanders' | 'backgrounds';
 };
 
-export function CommanderAutocomplete({ onSelect }: { onSelect: (c: CommanderCard) => void }) {
+export function CommanderAutocomplete({
+  onSelect,
+  placeholder = 'Search commander',
+  value = '',
+  searchMode = 'commanders',
+}: CommanderAutocompleteProps) {
   const [q, setQ] = useState('');
   const [items, setItems] = useState<CommanderCard[]>([]);
   const [b, setB] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    setQ(value);
+  }, [value]);
 
   const showResults = useMemo(() => isOpen && items.length > 0, [isOpen, items.length]);
 
@@ -33,12 +41,18 @@ export function CommanderAutocomplete({ onSelect }: { onSelect: (c: CommanderCar
             setB(false);
             return;
           }
-          const r = await searchCommanders(v);
-          setItems(r.cards.slice(0, 8));
-          setB(r.isBroadened);
+          if (searchMode === 'backgrounds') {
+            const cards = await searchBackgrounds(v);
+            setItems(cards.slice(0, 8));
+            setB(false);
+          } else {
+            const r = await searchCommanders(v);
+            setItems(r.cards.slice(0, 8));
+            setB(r.isBroadened);
+          }
           setIsOpen(true);
         }}
-        placeholder='Search commander'
+        placeholder={placeholder}
       />
       {b && <p className='text-xs text-amber-600'>Broadened results</p>}
 

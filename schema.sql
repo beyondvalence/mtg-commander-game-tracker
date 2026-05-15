@@ -121,7 +121,11 @@ declare
   v_winner_player_id uuid;
   v_marked_winner_count integer;
 begin
-  v_game_id := coalesce(new.game_id, old.game_id, new.id, old.id);
+  if tg_table_name = 'games' then
+    v_game_id := coalesce(new.id, old.id);
+  else
+    v_game_id := coalesce(new.game_id, old.game_id);
+  end if;
 
   select g.winner_participant_id, g.winner_player_id
     into v_winner_participant_id, v_winner_player_id

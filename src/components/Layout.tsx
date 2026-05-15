@@ -22,6 +22,13 @@ export function Layout() {
           </Link>
         ))}
       </nav>
+
+      <div className='wireframe-shell'>
+        <p className='wireframe-copy text-zinc-700'>
+          This tracker saves directly to your connected Supabase project without an in-app login.
+        </p>
+      </div>
+
       <Outlet />
     </div>
   );

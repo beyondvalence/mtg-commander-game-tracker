@@ -1,5 +1,6 @@
 -- MTG Commander Tracker Supabase Schema
 -- Run this in the Supabase SQL editor.
+-- This version is set up for a single-user browser client with no in-app login.
 
 create extension if not exists "pgcrypto";
 
@@ -12,28 +13,24 @@ begin
 end;
 $$ language plpgsql;
 
--- Profiles
-create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  display_name text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create trigger set_profiles_updated_at
-before update on public.profiles
-for each row execute function public.set_updated_at();
+-- Remove auth-specific setup from earlier versions of the app.
+drop trigger if exists on_auth_user_created on auth.users;
+drop function if exists public.handle_new_user();
+drop table if exists public.profiles cascade;
 
 -- Players
 create table if not exists public.players (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint players_user_name_unique unique (user_id, name)
+  updated_at timestamptz not null default now()
 );
 
+alter table public.players drop constraint if exists players_user_name_unique;
+alter table public.players drop column if exists user_id cascade;
+alter table public.players add constraint players_name_unique unique (name);
+
+drop trigger if exists set_players_updated_at on public.players;
 create trigger set_players_updated_at
 before update on public.players
 for each row execute function public.set_updated_at();
@@ -41,7 +38,6 @@ for each row execute function public.set_updated_at();
 -- Commanders
 create table if not exists public.commanders (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
   scryfall_id text,
   name text not null,
   image_url text,
@@ -49,10 +45,14 @@ create table if not exists public.commanders (
   type_line text,
   oracle_text text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint commanders_user_scryfall_unique unique (user_id, scryfall_id)
+  updated_at timestamptz not null default now()
 );
 
+alter table public.commanders drop constraint if exists commanders_user_scryfall_unique;
+alter table public.commanders drop column if exists user_id cascade;
+alter table public.commanders add constraint commanders_scryfall_unique unique (scryfall_id);
+
+drop trigger if exists set_commanders_updated_at on public.commanders;
 create trigger set_commanders_updated_at
 before update on public.commanders
 for each row execute function public.set_updated_at();
@@ -60,7 +60,6 @@ for each row execute function public.set_updated_at();
 -- Games
 create table if not exists public.games (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
   played_at date not null default current_date,
   duration_minutes integer check (duration_minutes is null or duration_minutes > 0),
   number_of_players integer not null default 4 check (number_of_players >= 2),
@@ -72,6 +71,9 @@ create table if not exists public.games (
   updated_at timestamptz not null default now()
 );
 
+alter table public.games drop column if exists user_id cascade;
+
+drop trigger if exists set_games_updated_at on public.games;
 create trigger set_games_updated_at
 before update on public.games
 for each row execute function public.set_updated_at();
@@ -79,7 +81,6 @@ for each row execute function public.set_updated_at();
 -- Game Participants
 create table if not exists public.game_participants (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
   game_id uuid not null references public.games(id) on delete cascade,
   player_id uuid not null references public.players(id),
   turn_order_position integer not null check (turn_order_position > 0),
@@ -92,9 +93,15 @@ create table if not exists public.game_participants (
   constraint game_participants_game_player_unique unique (game_id, player_id)
 );
 
+alter table public.game_participants drop column if exists user_id cascade;
+
+drop trigger if exists set_game_participants_updated_at on public.game_participants;
 create trigger set_game_participants_updated_at
 before update on public.game_participants
 for each row execute function public.set_updated_at();
+
+alter table public.games
+drop constraint if exists games_winner_participant_fk;
 
 alter table public.games
 add constraint games_winner_participant_fk
@@ -122,7 +129,7 @@ begin
   where g.id = v_game_id;
 
   if v_winner_participant_id is null then
-    raise exception 'games.winner_participant_id must be set for game %', v_game_id;
+    return null;
   end if;
 
   if not exists (
@@ -167,128 +174,79 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists trg_enforce_game_winner_consistency_from_games on public.games;
 create constraint trigger trg_enforce_game_winner_consistency_from_games
 after insert or update of winner_participant_id, winner_player_id on public.games
 deferrable initially deferred
 for each row execute function public.enforce_game_winner_consistency();
 
+drop trigger if exists trg_enforce_game_winner_consistency_from_participants on public.game_participants;
 create constraint trigger trg_enforce_game_winner_consistency_from_participants
 after insert or update of is_winner, game_id, player_id or delete on public.game_participants
 deferrable initially deferred
 for each row execute function public.enforce_game_winner_consistency();
 
 -- Indexes
-create index if not exists idx_players_user_id on public.players(user_id);
-create index if not exists idx_commanders_user_id on public.commanders(user_id);
-create index if not exists idx_games_user_id on public.games(user_id);
 create index if not exists idx_games_played_at on public.games(played_at);
-create index if not exists idx_game_participants_user_id on public.game_participants(user_id);
 create index if not exists idx_game_participants_game_id on public.game_participants(game_id);
 
+-- Data API grants
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on table public.players to anon, authenticated;
+grant select, insert, update, delete on table public.commanders to anon, authenticated;
+grant select, insert, update, delete on table public.games to anon, authenticated;
+grant select, insert, update, delete on table public.game_participants to anon, authenticated;
+
 -- Row Level Security
-alter table public.profiles enable row level security;
 alter table public.players enable row level security;
 alter table public.commanders enable row level security;
 alter table public.games enable row level security;
 alter table public.game_participants enable row level security;
 
--- Profiles policies
-create policy "Users can view own profile"
-on public.profiles for select
-using (auth.uid() = id);
+drop policy if exists "Users can view own players" on public.players;
+drop policy if exists "Users can insert own players" on public.players;
+drop policy if exists "Users can update own players" on public.players;
+drop policy if exists "Users can delete own players" on public.players;
+drop policy if exists "Single user can manage players" on public.players;
+create policy "Single user can manage players"
+on public.players
+for all
+to anon, authenticated
+using (true)
+with check (true);
 
-create policy "Users can insert own profile"
-on public.profiles for insert
-with check (auth.uid() = id);
+drop policy if exists "Users can view own commanders" on public.commanders;
+drop policy if exists "Users can insert own commanders" on public.commanders;
+drop policy if exists "Users can update own commanders" on public.commanders;
+drop policy if exists "Users can delete own commanders" on public.commanders;
+drop policy if exists "Single user can manage commanders" on public.commanders;
+create policy "Single user can manage commanders"
+on public.commanders
+for all
+to anon, authenticated
+using (true)
+with check (true);
 
-create policy "Users can update own profile"
-on public.profiles for update
-using (auth.uid() = id)
-with check (auth.uid() = id);
+drop policy if exists "Users can view own games" on public.games;
+drop policy if exists "Users can insert own games" on public.games;
+drop policy if exists "Users can update own games" on public.games;
+drop policy if exists "Users can delete own games" on public.games;
+drop policy if exists "Single user can manage games" on public.games;
+create policy "Single user can manage games"
+on public.games
+for all
+to anon, authenticated
+using (true)
+with check (true);
 
--- Players policies
-create policy "Users can view own players"
-on public.players for select
-using (auth.uid() = user_id);
-
-create policy "Users can insert own players"
-on public.players for insert
-with check (auth.uid() = user_id);
-
-create policy "Users can update own players"
-on public.players for update
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
-
-create policy "Users can delete own players"
-on public.players for delete
-using (auth.uid() = user_id);
-
--- Commanders policies
-create policy "Users can view own commanders"
-on public.commanders for select
-using (auth.uid() = user_id);
-
-create policy "Users can insert own commanders"
-on public.commanders for insert
-with check (auth.uid() = user_id);
-
-create policy "Users can update own commanders"
-on public.commanders for update
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
-
-create policy "Users can delete own commanders"
-on public.commanders for delete
-using (auth.uid() = user_id);
-
--- Games policies
-create policy "Users can view own games"
-on public.games for select
-using (auth.uid() = user_id);
-
-create policy "Users can insert own games"
-on public.games for insert
-with check (auth.uid() = user_id);
-
-create policy "Users can update own games"
-on public.games for update
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
-
-create policy "Users can delete own games"
-on public.games for delete
-using (auth.uid() = user_id);
-
--- Game participants policies
-create policy "Users can view own game participants"
-on public.game_participants for select
-using (auth.uid() = user_id);
-
-create policy "Users can insert own game participants"
-on public.game_participants for insert
-with check (auth.uid() = user_id);
-
-create policy "Users can update own game participants"
-on public.game_participants for update
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
-
-create policy "Users can delete own game participants"
-on public.game_participants for delete
-using (auth.uid() = user_id);
-
--- Optional: create profile automatically on signup
-create or replace function public.handle_new_user()
-returns trigger as $$
-begin
-  insert into public.profiles (id, display_name)
-  values (new.id, coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)))
-  on conflict (id) do nothing;
-  return new;
-end;
-$$ language plpgsql security definer;
-
-create trigger on_auth_user_created
-after insert on auth.users
-for each row execute function public.handle_new_user();
+drop policy if exists "Users can view own game participants" on public.game_participants;
+drop policy if exists "Users can insert own game participants" on public.game_participants;
+drop policy if exists "Users can update own game participants" on public.game_participants;
+drop policy if exists "Users can delete own game participants" on public.game_participants;
+drop policy if exists "Single user can manage game participants" on public.game_participants;
+create policy "Single user can manage game participants"
+on public.game_participants
+for all
+to anon, authenticated
+using (true)
+with check (true);

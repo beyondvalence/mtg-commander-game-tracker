@@ -13,7 +13,7 @@ export default function DashboardPage() {
             <p className="text-4xl font-bold text-zinc-900">0</p>
           </div>
         </div>
-        <p className="wireframe-copy text-zinc-700">Welcome! Start by adding a game to track your MTG Commander sessions.</p>
+        <p className="wireframe-copy text-zinc-700">Start by adding a game to track your MTG Commander sessions in your connected Supabase project.</p>
       </div>
     </section>
   );

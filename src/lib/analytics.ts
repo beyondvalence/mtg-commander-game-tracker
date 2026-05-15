@@ -18,7 +18,14 @@ export function commanderWinRates(games: GameRecord[]) {
 }
 export function commanderPairWinRates(games: GameRecord[]) {
   const m = new Map<string, { wins: number; games: number }>();
-  for (const g of games) for (const p of g.participants) { const k = keyPair(p.primary?.name, p.secondary?.name) || 'Unknown'; const rec = m.get(k) ?? { wins: 0, games: 0 }; rec.games++; if (p.isWinner) rec.wins++; m.set(k, rec); }
+  for (const g of games) for (const p of g.participants) {
+    if (!p.secondary?.name) continue;
+    const k = keyPair(p.primary?.name, p.secondary.name);
+    const rec = m.get(k) ?? { wins: 0, games: 0 };
+    rec.games++;
+    if (p.isWinner) rec.wins++;
+    m.set(k, rec);
+  }
   return [...m.entries()].map(([pair, r]) => ({ pair, ...r, winRate: r.wins / r.games }));
 }
 export function rollingWinRate(games: GameRecord[], window = 5) { const ordered = [...games].sort((a, b) => a.playedAt.localeCompare(b.playedAt)); return ordered.map((_, i) => { const slice = ordered.slice(Math.max(0, i - window + 1), i + 1); const wins = slice.filter((g) => g.participants.some((p) => p.isWinner)).length; return { index: i + 1, value: wins / slice.length }; }); }

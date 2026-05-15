@@ -7,5 +7,5 @@ const games = [
 describe('analytics deterministic fixtures', () => {
   it('computes commander win rates', () => { const rows = commanderWinRates(games); expect(rows.find((r) => r.name==='Atraxa')?.wins).toBe(1); });
   it('computes pair win rates', () => { const rows = commanderPairWinRates(games); expect(rows.find((r) => r.pair.includes('Kraum'))?.wins).toBe(1); });
-  it('rolling window deterministic', () => { const rows = rollingWinRate(games, 2); expect(rows.at(-1)?.value).toBe(1); });
+  it('rolling window deterministic', () => { const rows = rollingWinRate(games, 2); expect(rows[rows.length - 1]?.value).toBe(1); });
 });

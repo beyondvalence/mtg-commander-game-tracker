@@ -15,6 +15,7 @@ export type HistoryGame = {
   played_at: string;
   created_at: string;
   number_of_players: number;
+  bracket: number;
   win_condition: string;
   notes: string | null;
   game_participants: HistoryGameParticipant[];
@@ -23,6 +24,17 @@ export type HistoryGame = {
 export type NumberedHistoryGame = HistoryGame & {
   gameNumber: number;
 };
+
+function isMissingBracketColumnError(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = 'code' in error ? error.code : null;
+  const message = 'message' in error && typeof error.message === 'string' ? error.message.toLowerCase() : '';
+
+  return (code === 'PGRST204' || code === '42703') && message.includes('bracket');
+}
 
 export type PlayerDirectoryEntry = {
   id: string;
@@ -77,14 +89,13 @@ function toNumberedGames(games: HistoryGame[]) {
 }
 
 export async function fetchNumberedGames() {
-  const { data, error } = await supabase
-    .from('games')
-    .select(`
+  const query = `
       id,
       title,
       played_at,
       created_at,
       number_of_players,
+      bracket,
       win_condition,
       notes,
       game_participants!game_participants_game_id_fkey (
@@ -104,11 +115,59 @@ export async function fetchNumberedGames() {
           image_url
         )
       )
-    `)
+    `;
+
+  const { data, error } = await supabase
+    .from('games')
+    .select(query)
     .order('played_at', { ascending: false })
     .order('created_at', { ascending: false });
 
   if (error) {
+    if (isMissingBracketColumnError(error)) {
+      const fallbackResult = await supabase
+        .from('games')
+        .select(`
+          id,
+          title,
+          played_at,
+          created_at,
+          number_of_players,
+          win_condition,
+          notes,
+          game_participants!game_participants_game_id_fkey (
+            id,
+            turn_order_position,
+            is_winner,
+            player:players (
+              id,
+              name
+            ),
+            primary_commander:commanders!game_participants_primary_commander_id_fkey (
+              name,
+              image_url
+            ),
+            secondary_commander:commanders!game_participants_secondary_commander_id_fkey (
+              name,
+              image_url
+            )
+          )
+        `)
+        .order('played_at', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (fallbackResult.error) {
+        throw fallbackResult.error;
+      }
+
+      const fallbackGames = ((fallbackResult.data as Omit<HistoryGame, 'bracket'>[] | null) ?? []).map((game) => ({
+        ...game,
+        bracket: 3,
+      }));
+
+      return toNumberedGames(fallbackGames);
+    }
+
     throw error;
   }
 

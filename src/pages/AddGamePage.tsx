@@ -10,6 +10,7 @@ type AddGameFormValues = {
   gameTitle: string;
   playedAt: string;
   playersCount: string;
+  bracket: string;
   winCondition: string;
 };
 
@@ -85,12 +86,24 @@ function isSecondarySelectionValid(primary: CommanderCard | null | undefined, se
   return !isBackgroundCard(secondary);
 }
 
+function isMissingBracketColumnError(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = 'code' in error ? error.code : null;
+  const message = 'message' in error && typeof error.message === 'string' ? error.message.toLowerCase() : '';
+
+  return (code === 'PGRST204' || code === '42703') && message.includes('bracket');
+}
+
 export default function AddGamePage() {
   const { register, handleSubmit, watch } = useForm<AddGameFormValues>({
     defaultValues: {
       gameTitle: '',
       playedAt: new Date().toISOString().slice(0, 10),
       playersCount: '4',
+      bracket: '3',
       winCondition: '',
     },
   });
@@ -274,18 +287,33 @@ export default function AddGamePage() {
         });
       }
 
-      const { data: gameData, error: gameError } = await supabase
+      let gameInsertResult = await supabase
         .from('games')
         .insert({
           title: formData.gameTitle.trim() || null,
           played_at: formData.playedAt,
           number_of_players: parseInt(formData.playersCount, 10),
+          bracket: parseInt(formData.bracket, 10),
           win_condition: formData.winCondition,
         })
         .select()
         .single();
 
-      if (gameError) throw gameError;
+      if (gameInsertResult.error && isMissingBracketColumnError(gameInsertResult.error)) {
+        gameInsertResult = await supabase
+          .from('games')
+          .insert({
+            title: formData.gameTitle.trim() || null,
+            played_at: formData.playedAt,
+            number_of_players: parseInt(formData.playersCount, 10),
+            win_condition: formData.winCondition,
+          })
+          .select()
+          .single();
+      }
+
+      if (gameInsertResult.error) throw gameInsertResult.error;
+      const gameData = gameInsertResult.data;
 
       const insertedParticipants: Array<{
         id: string;
@@ -356,6 +384,14 @@ export default function AddGamePage() {
           className='app-input'
           {...register('playersCount', { required: true, min: 2, max: 4 })}
         />
+
+        <select className='app-input' {...register('bracket', { required: true })}>
+          <option value='1'>Bracket 1</option>
+          <option value='2'>Bracket 2</option>
+          <option value='3'>Bracket 3</option>
+          <option value='4'>Bracket 4</option>
+          <option value='5'>Bracket 5</option>
+        </select>
 
         <select className='app-input' {...register('winCondition', { required: true })}>
           <option value=''>Select win condition</option>

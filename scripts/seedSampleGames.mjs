@@ -13,6 +13,7 @@ const sampleGames = [
   {
     title: 'Sample Pod: Grave Pact',
     played_at: '2026-05-09',
+    bracket: 2,
     win_condition: 'Combo',
     winnerSeat: 2,
     participants: [
@@ -25,6 +26,7 @@ const sampleGames = [
   {
     title: 'Sample Pod: Blood and Brass',
     played_at: '2026-05-11',
+    bracket: 3,
     win_condition: 'Combat',
     winnerSeat: 2,
     participants: [
@@ -37,6 +39,7 @@ const sampleGames = [
   {
     title: 'Sample Pod: Wild Growth',
     played_at: '2026-05-13',
+    bracket: 4,
     win_condition: 'Commander Damage',
     winnerSeat: 1,
     participants: [
@@ -130,6 +133,7 @@ async function main() {
         title: game.title,
         played_at: game.played_at,
         number_of_players: 4,
+        bracket: game.bracket,
         win_condition: game.win_condition,
       })
       .select('id')

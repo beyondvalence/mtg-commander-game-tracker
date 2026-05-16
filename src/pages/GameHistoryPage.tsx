@@ -166,7 +166,7 @@ export default function GameHistoryPage() {
                   <p className='text-lg font-semibold'>{game.title?.trim() || `Untitled Game #${game.gameNumber}`}</p>
                   <p className='text-lg font-semibold'>{formatPlayedAt(game.played_at)}</p>
                   <p className='app-muted text-sm'>
-                    {game.number_of_players} players · {game.win_condition}
+                    {game.number_of_players} players · Bracket {game.bracket} · {game.win_condition}
                   </p>
                 </div>
                 <div className='app-chip'>

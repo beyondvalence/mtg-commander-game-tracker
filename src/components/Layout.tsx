@@ -6,11 +6,10 @@ const THEME_STORAGE_KEY = 'mtg-commander-theme';
 type ThemeMode = 'light' | 'dark';
 
 const links = [
-  { to: '/', label: 'Home', shortLabel: 'HM' },
-  { to: '/add-game', label: 'Add Game', shortLabel: 'AG' },
-  { to: '/history', label: 'History', shortLabel: 'HI' },
-  { to: '/commanders', label: 'Commanders', shortLabel: 'CM' },
-  { to: '/players', label: 'Players', shortLabel: 'PL' },
+  { to: '/', label: 'Home' },
+  { to: '/add-game', label: 'Add Game' },
+  { to: '/history', label: 'History' },
+  { to: '/players', label: 'Players' },
 ];
 
 function applyTheme(theme: ThemeMode) {
@@ -81,77 +80,59 @@ export function Layout() {
   const themeLabel = useMemo(() => (theme === 'dark' ? 'Dark mode' : 'Light mode'), [theme]);
 
   return (
-    <div className='mx-auto flex min-h-screen w-full max-w-[1550px] flex-col gap-4 px-4 py-4 md:flex-row md:gap-6 md:px-6 md:py-6'>
-      <aside className='app-sidebar md:sticky md:top-6 md:h-[calc(100vh-3rem)] md:w-[280px] md:min-w-[280px]'>
-        <div className='space-y-2'>
-          <p className='text-xs font-bold uppercase tracking-[0.3em] app-muted'>Commander Tracker</p>
-          <h1 className='text-3xl font-black tracking-tight'>Table Log</h1>
-          <p className='text-sm leading-relaxed app-muted'>
-            Track every pod, every winner, and every commander straight from your connected Supabase project.
-          </p>
-        </div>
-
-        <nav className='flex flex-1 flex-col gap-2'>
+    <div className='mx-auto flex min-h-screen w-full max-w-[1550px] flex-col gap-4 px-4 py-4 md:px-6 md:py-6'>
+      <header className='app-topbar' data-theme-menu-root>
+        <nav className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
           {links.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
               className={({ isActive }) => `app-navlink ${isActive ? 'app-navlink-active' : ''}`}
             >
-              <span className='flex h-9 w-9 items-center justify-center rounded-xl app-card-soft text-xs font-black tracking-[0.2em]'>
-                {link.shortLabel}
-              </span>
               <span>{link.label}</span>
             </NavLink>
           ))}
         </nav>
 
-        <div className='mt-auto flex items-end justify-between gap-3' data-theme-menu-root>
-          <div>
-            <p className='text-xs font-bold uppercase tracking-[0.25em] app-muted'>Theme</p>
-            <p className='text-sm font-semibold'>{themeLabel}</p>
-          </div>
+        <div className='relative ml-auto'>
+          <button
+            type='button'
+            className='theme-toggle-button'
+            aria-label={`Open theme selector. Current theme: ${themeLabel}`}
+            aria-expanded={themeMenuOpen}
+            onClick={() => setThemeMenuOpen((open) => !open)}
+          >
+            <ThemeIcon theme={theme} />
+          </button>
 
-          <div className='relative'>
-            <button
-              type='button'
-              className='theme-toggle-button'
-              aria-label='Open theme selector'
-              aria-expanded={themeMenuOpen}
-              onClick={() => setThemeMenuOpen((open) => !open)}
-            >
-              <ThemeIcon theme={theme} />
-            </button>
-
-            {themeMenuOpen && (
-              <div className='absolute bottom-14 right-0 z-30 w-44 rounded-[1.5rem] border p-2 app-card'>
-                <button
-                  type='button'
-                  className={`theme-option ${theme === 'light' ? 'theme-option-active' : ''}`}
-                  onClick={() => {
-                    setTheme('light');
-                    setThemeMenuOpen(false);
-                  }}
-                >
-                  <span>Light</span>
-                  {theme === 'light' && <span>•</span>}
-                </button>
-                <button
-                  type='button'
-                  className={`theme-option ${theme === 'dark' ? 'theme-option-active' : ''}`}
-                  onClick={() => {
-                    setTheme('dark');
-                    setThemeMenuOpen(false);
-                  }}
-                >
-                  <span>Dark</span>
-                  {theme === 'dark' && <span>•</span>}
-                </button>
-              </div>
-            )}
-          </div>
+          {themeMenuOpen && (
+            <div className='absolute right-0 top-14 z-30 w-44 rounded-[1.5rem] border p-2 app-card'>
+              <button
+                type='button'
+                className={`theme-option ${theme === 'light' ? 'theme-option-active' : ''}`}
+                onClick={() => {
+                  setTheme('light');
+                  setThemeMenuOpen(false);
+                }}
+              >
+                <span>Light</span>
+                {theme === 'light' && <span>•</span>}
+              </button>
+              <button
+                type='button'
+                className={`theme-option ${theme === 'dark' ? 'theme-option-active' : ''}`}
+                onClick={() => {
+                  setTheme('dark');
+                  setThemeMenuOpen(false);
+                }}
+              >
+                <span>Dark</span>
+                {theme === 'dark' && <span>•</span>}
+              </button>
+            </div>
+          )}
         </div>
-      </aside>
+      </header>
 
       <main className='flex min-w-0 flex-1 flex-col gap-6'>
         <Outlet />

@@ -412,6 +412,17 @@ export async function fetchAddGamePlayerSuggestions() {
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
+export async function setGameWinner(gameId: string, winnerParticipantId: string | null) {
+  const { error } = await supabase.rpc('set_game_winner', {
+    p_game_id: gameId,
+    p_winner_participant_id: winnerParticipantId,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export function readSingleName(value: { name: string } | { name: string }[] | null) {
   if (Array.isArray(value)) {
     return value[0]?.name ?? 'Unknown';

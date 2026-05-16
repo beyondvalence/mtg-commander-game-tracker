@@ -3,83 +3,69 @@
 ## Current App State
 
 - The app is a no-login MTG Commander tracker backed directly by a live Supabase project.
-- Navigation uses a left sidebar with a persisted light/dark theme toggle.
-- The dashboard, history, and players pages all read live data from Supabase through `src/lib/gameRecords.ts`.
-- The Add Game page now presents a tighter `Log a Game` layout with a header save action, labeled seat-count selector, reusable win-condition suggestions, player-name autocomplete, player-specific commander suggestions, and two-card commander setups for partner/background-style pairings.
-- The Game History page supports inline title editing, player-name filtering, per-seat commander thumbnails, and bracket display for each saved game.
-- The Players page now renders one tile per unique player with search by player name or commander name.
+- Navigation now uses a compact horizontal top bar with a theme button on the right.
+- The main active pages are Dashboard, Add Game, Game History, and Players.
+- Add Game supports optional unfinished games, reusable win-condition suggestions, player-name autocomplete, player-specific commander suggestions, and partner/background-style secondary commanders.
+- Game History supports inline game editing for title, win condition, and winner selection, with winner changes applied through the shared `set_game_winner` database function.
+- Players renders live player tiles plus summary stat cards derived from saved history.
 
 ## Recent Work
 
-- Tightened the Add Game page layout by moving save into the header, compressing form spacing, and shifting each seat card to a two-column input-plus-art layout with a larger winner toggle.
-- Renamed the Add Game screen title to `Log a Game` and replaced the player-count number input with a labeled `Number of Seats` dropdown.
-- Added player-name autocomplete on Add Game using saved players from Supabase.
-- Added player-specific commander suggestions on Add Game so matching players see commanders from their saved game history while still being able to search and add new commanders from Scryfall.
-- Added reusable win-condition suggestions sourced from saved games plus an `Add new win condition` path that stores custom values for future games.
-- Added `games.bracket` support to the schema, Add Game flow, Game History display, shared game reads, and sample seed data.
-- Applied the `games.bracket` schema update directly to the linked Supabase project and verified the live column/default/check constraint through the Supabase Management API.
-- Added a compatibility fallback so localhost still reads and writes games against older schemas that do not yet expose the `bracket` column.
-- Added optional `games.title` support to the schema, Add Game flow, and Game History page.
-- Seeded the live Supabase project with 3 additional four-player sample games using real Scryfall commander metadata.
-- Added `scripts/seedSampleGames.mjs` for repeatable sample data inserts.
-- Added `scripts/backfillCommanderImages.mjs` and repaired missing commander art in the live project.
-- Reworked Game History to show each game's players in a 2x2 grid for four-player pods, with right-aligned commander thumbnails and a player filter.
-- Replaced the Players placeholder page with searchable live player tiles and commander art summaries.
-- Removed the extra top-level “connected Supabase project” banner from the main layout.
-
-## Recent Commits
-
-- `bb2eb6c` - `Add game bracket tracking`
-- `ef99e0e` - `Add commander card previews and refresh project context`
-- `ac29db7` - `Add sidebar theme toggle and live game tracking UI`
-- `a504d6d` - `Convert tracker to no-login Supabase app`
+- Reworked the app shell from a left sidebar to a top navigation bar and removed the standalone Commanders page from active navigation.
+- Renamed the Add Game screen title, tightened the page controls, and moved the game notes field into the main Add Game flow.
+- Made Add Game support unfinished games by hiding winner and win-condition requirements until `Finished game` is enabled.
+- Reworked seat-card layouts on Add Game and Game History to emphasize commander art and simpler winner interactions.
+- Added clickable Scryfall links from commander names and art across Add Game, Game History, and Players.
+- Expanded Game History editing so one `Edit game` flow now updates title, win condition, and winner state together.
+- Replaced the History winner dropdown interaction with per-seat winner buttons inside each seat card while editing.
+- Fixed the live `set_game_winner` SQL function so winner changes safely clear the old winner before assigning the new one, avoiding the unique partial-index violation on `game_participants.is_winner`.
+- Expanded Players summary cards to include most-played player, highest win-rate player, most-played commander, and highest commander win rate.
+- Added navigation from a player tile into Game History with that player pre-filled as the filter.
 
 ## Key Files
 
 - `src/pages/AddGamePage.tsx`
-  Multi-seat game entry, title capture, bracket selection, seat-count selector, reusable win-condition flow, player-name autocomplete, player-specific commander suggestions, secondary commander logic, and save flow.
+  Add Game form state, finished-game toggle behavior, player suggestions, commander selection, notes capture, and save flow.
 - `src/pages/GameHistoryPage.tsx`
-  History list, inline title editing, player filtering, per-seat commander thumbnails, and bracket display.
+  Filtered history list, inline edit mode, win-condition dropdown editing, seat-card winner selection, and Scryfall links.
 - `src/pages/PlayersPage.tsx`
-  Searchable player directory with per-player commander tiles and summary stats.
+  Player summary cards, player search, player-to-history navigation, and commander-link rendering.
 - `src/lib/gameRecords.ts`
-  Shared Supabase reads plus numbered game aggregation, player-directory helpers, add-game player suggestion helpers, and win-condition suggestion helpers, including bracket compatibility fallback.
-- `src/components/CommanderAutocomplete.tsx`
-  Commander search UI that now merges player-history suggestions with live Scryfall results.
+  Shared reads for history and player summaries plus the `setGameWinner` RPC wrapper.
+- `src/lib/scryfall.ts`
+  Commander search helpers and the shared Scryfall URL builder.
+- `src/components/Layout.tsx`
+  Top navigation shell and theme menu.
 - `src/index.css`
-  Theme variables plus tightened commander layout styling for add-game, history, and player tiles.
+  App-wide layout and card styling for Add Game, History, and Players.
 - `schema.sql`
-  Current Supabase schema, including `games.title`, `games.bracket`, and winner consistency trigger logic.
-- `scripts/seedSampleGames.mjs`
-  Live sample-game seed script with bracket values for seeded pods.
-- `scripts/backfillCommanderImages.mjs`
-  Live repair script for missing commander image URLs.
-
-## Live Data Snapshot
-
-- The connected Supabase project currently contains 6 games, 23 participant rows, 21 commanders, and 19 players.
-- 5 saved games are four-player pods.
-- 3 saved games include a secondary commander pairing.
-- All currently saved games have a non-null `bracket` value, with the existing live rows backfilled to the default bracket `3`.
-- Live commander image backfill has been completed, and saved game participants currently resolve commander artwork successfully.
+  Current schema plus the corrected `set_game_winner` function and winner consistency triggers.
 
 ## Validation Status
 
-- `npm test -- --run` passes with the current worktree.
-- `npm run build` passes with the current worktree.
-- Add Game layout, player-history suggestions, and reusable win-condition flow were verified locally through a successful production build.
-- Live Supabase reads were rechecked for counts, bracket presence, and recent game payloads after the latest bracket work.
-- The linked Supabase project now reports `public.games.bracket` as `integer`, `NOT NULL`, default `3`, with a `1..5` check constraint.
+- `npm test -- --run` passes.
+- `npm run build` passes.
+- Live Supabase validation confirmed Add Game writes succeed and surface through history/player reads.
+- Live Supabase validation also confirmed History edit saves correctly update:
+  - `games.title`
+  - `games.win_condition`
+  - `games.winner_participant_id`
+  - `games.winner_player_id`
+  - `game_participants.is_winner`
+- The live `set_game_winner` function was patched during this session and revalidated successfully after the fix.
 
 ## Known Caveats
 
-- The current no-login Supabase setup still exposes app data broadly through public client access and permissive RLS policies.
+- The app still uses broad public Supabase access with permissive RLS for this no-login setup.
 - Game creation still happens as multiple client-side writes rather than a single transactional RPC.
-- The live database currently contains historical commander rows with placeholder `scryfall_id` values, even though missing artwork has been repaired.
+- Players summary cards currently derive their metrics client-side from full history reads, which will eventually become a scaling bottleneck.
+- The repo still contains `src/pages/CommandersPage.tsx`, but the route now redirects to home and the page is no longer exposed in navigation.
 
 ## TODO Notes
 
+- Convert Add Game creation into a single transactional database function or RPC.
 - Add a game-service field or selector for `paper`, `Convoke`, or `Spelltable`.
+- Consider pushing player and commander summary aggregation into SQL for better performance at larger data volumes.
 
 ## Ignored Local Files
 

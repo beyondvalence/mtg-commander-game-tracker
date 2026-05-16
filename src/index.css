@@ -63,8 +63,8 @@ body {
     @apply text-xl leading-relaxed md:text-3xl;
   }
 
-  .app-sidebar {
-    @apply flex h-full flex-col gap-5 rounded-[2rem] border p-5 md:p-6;
+  .app-topbar {
+    @apply flex items-center gap-3 rounded-[1.5rem] border px-4 py-2 md:px-5;
     background: linear-gradient(180deg, var(--app-shell), var(--app-panel-soft));
     border-color: var(--app-border);
     box-shadow: var(--app-shadow);
@@ -125,10 +125,11 @@ body {
   }
 
   .app-navlink {
-    @apply flex items-center gap-3 rounded-2xl border px-4 py-3 text-base font-semibold transition;
+    @apply flex items-center rounded-2xl border px-3 py-2 text-base font-semibold transition md:text-lg;
     background: transparent;
     border-color: transparent;
     color: var(--app-muted);
+    white-space: nowrap;
   }
 
   .app-navlink:hover {
@@ -144,7 +145,7 @@ body {
   }
 
   .theme-toggle-button {
-    @apply flex h-12 w-12 items-center justify-center rounded-2xl border transition;
+    @apply flex h-10 w-10 items-center justify-center rounded-2xl border transition;
     background: var(--app-panel);
     border-color: var(--app-border);
     color: var(--app-text);
@@ -170,7 +171,7 @@ body {
   }
 
   .commander-stage {
-    @apply flex justify-center rounded-[1.25rem] border p-3;
+    @apply flex items-center justify-center overflow-hidden rounded-[1.25rem] border p-2;
     min-height: 11.75rem;
     background:
       linear-gradient(145deg, color-mix(in srgb, var(--app-panel-soft) 92%, transparent), color-mix(in srgb, var(--app-panel) 84%, transparent));
@@ -178,26 +179,26 @@ body {
   }
 
   .commander-stage-stack {
-    @apply relative flex w-full max-w-[11rem] items-center justify-center;
-    min-height: 9.25rem;
+    @apply relative flex h-full w-full items-center justify-center;
+    min-height: 14.75rem;
   }
 
   .commander-stage-stack.has-secondary {
-    min-height: 10.75rem;
+    min-height: 14.75rem;
   }
 
   .commander-stage-card {
     @apply absolute flex items-center justify-center overflow-hidden rounded-2xl border text-center text-xs font-semibold uppercase tracking-[0.25em];
-    width: 7.5rem;
-    height: 10.4rem;
+    inset: 0.25rem;
     background-color: var(--app-panel-strong);
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: cover;
     border-color: var(--app-border);
     color: var(--app-muted);
     box-shadow: var(--app-shadow);
     transition: transform 180ms ease, box-shadow 180ms ease, z-index 180ms ease;
+  }
+
+  .commander-stage-image {
+    @apply h-full w-full rounded-[0.9rem] object-cover;
   }
 
   .commander-stage-card span {
@@ -206,12 +207,13 @@ body {
 
   .commander-stage-card.primary {
     z-index: 2;
-    transform: translate(-0.4rem, -0.4rem);
+    transform: translate(-0.3rem, -0.3rem);
   }
 
   .commander-stage-card.secondary {
     z-index: 1;
-    transform: translate(0.55rem, 0.65rem);
+    inset: 1rem;
+    transform: translate(0.65rem, 0.75rem);
   }
 
   .commander-stage-stack.has-secondary .commander-stage-card:hover {
@@ -229,7 +231,7 @@ body {
   }
 
   .history-commander-pair {
-    @apply flex flex-shrink-0 items-start gap-2 self-center;
+    @apply flex flex-shrink-0 items-start gap-2 self-start;
   }
 
   .history-commander-pair.has-secondary {

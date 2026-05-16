@@ -1,5 +1,7 @@
 import { useDeferredValue, useEffect, useState } from 'react';
-import { fetchPlayerDirectory, type PlayerDirectoryEntry } from '../lib/gameRecords';
+import { useNavigate } from 'react-router-dom';
+import { fetchNumberedGames, fetchPlayerDirectory, readSingleCommander, type NumberedHistoryGame, type PlayerDirectoryEntry } from '../lib/gameRecords';
+import { getScryfallSearchUrl } from '../lib/scryfall';
 
 function formatPlayedAt(value: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -12,7 +14,9 @@ function formatWinRate(value: number) {
 }
 
 export default function PlayersPage() {
+  const navigate = useNavigate();
   const [players, setPlayers] = useState<PlayerDirectoryEntry[]>([]);
+  const [games, setGames] = useState<NumberedHistoryGame[]>([]);
   const [searchValue, setSearchValue] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,9 +30,13 @@ export default function PlayersPage() {
         setIsLoading(true);
         setError(null);
 
-        const nextPlayers = await fetchPlayerDirectory();
+        const [nextPlayers, nextGames] = await Promise.all([
+          fetchPlayerDirectory(),
+          fetchNumberedGames(),
+        ]);
         if (isMounted) {
           setPlayers(nextPlayers);
+          setGames(nextGames);
         }
       } catch (err) {
         if (isMounted) {
@@ -57,32 +65,160 @@ export default function PlayersPage() {
 
   const totalWins = players.reduce((sum, player) => sum + player.wins, 0);
   const totalCommanders = new Set(players.flatMap((player) => player.commanders.map((commander) => commander.name))).size;
+  const mostGamesPlayer = players.reduce<PlayerDirectoryEntry | null>((leader, player) => {
+    if (!leader || player.gamesPlayed > leader.gamesPlayed) {
+      return player;
+    }
+
+    if (player.gamesPlayed === leader.gamesPlayed && player.name.localeCompare(leader.name) < 0) {
+      return player;
+    }
+
+    return leader;
+  }, null);
+  const commanderTotals = new Map<string, { name: string; appearances: number }>();
+  for (const player of players) {
+    for (const commander of player.commanders) {
+      const existing = commanderTotals.get(commander.name);
+      if (existing) {
+        existing.appearances += commander.appearances;
+      } else {
+        commanderTotals.set(commander.name, { name: commander.name, appearances: commander.appearances });
+      }
+    }
+  }
+  const mostPopularCommander = [...commanderTotals.values()].reduce<{ name: string; appearances: number } | null>((leader, commander) => {
+    if (!leader || commander.appearances > leader.appearances) {
+      return commander;
+    }
+
+    if (commander.appearances === leader.appearances && commander.name.localeCompare(leader.name) < 0) {
+      return commander;
+    }
+
+    return leader;
+  }, null);
+  const highestWinRatePlayer = players.reduce<PlayerDirectoryEntry | null>((leader, player) => {
+    if (!leader || player.winRate > leader.winRate) {
+      return player;
+    }
+
+    if (player.winRate === leader.winRate && player.wins > leader.wins) {
+      return player;
+    }
+
+    if (player.winRate === leader.winRate && player.wins === leader.wins && player.name.localeCompare(leader.name) < 0) {
+      return player;
+    }
+
+    return leader;
+  }, null);
+  const commanderPerformanceTotals = new Map<string, { name: string; wins: number; appearances: number }>();
+  for (const game of games) {
+    for (const participant of game.game_participants) {
+      const primaryCommander = readSingleCommander(participant.primary_commander);
+      const secondaryCommander = readSingleCommander(participant.secondary_commander);
+
+      for (const commander of [primaryCommander, secondaryCommander]) {
+        if (!commander) {
+          continue;
+        }
+
+        const existing = commanderPerformanceTotals.get(commander.name);
+        if (existing) {
+          existing.appearances += 1;
+          existing.wins += participant.is_winner ? 1 : 0;
+        } else {
+          commanderPerformanceTotals.set(commander.name, {
+            name: commander.name,
+            appearances: 1,
+            wins: participant.is_winner ? 1 : 0,
+          });
+        }
+      }
+    }
+  }
+  const highestCommanderWinRate = [...commanderPerformanceTotals.values()].reduce<{ name: string; wins: number; appearances: number } | null>((leader, commander) => {
+    const commanderRate = commander.appearances > 0 ? commander.wins / commander.appearances : 0;
+    const leaderRate = leader && leader.appearances > 0 ? leader.wins / leader.appearances : -1;
+
+    if (!leader || commanderRate > leaderRate) {
+      return commander;
+    }
+
+    if (commanderRate === leaderRate && commander.wins > leader.wins) {
+      return commander;
+    }
+
+    if (commanderRate === leaderRate && commander.wins === leader.wins && commander.name.localeCompare(leader.name) < 0) {
+      return commander;
+    }
+
+    return leader;
+  }, null);
 
   return (
     <section className='wireframe-shell space-y-6'>
-      <div className='space-y-2 text-left'>
+      <div className='text-left'>
         <h1 className='wireframe-title'>Players</h1>
-        <p className='wireframe-copy app-muted'>Search by player name or commander to jump straight to the people and decks showing up in your pods.</p>
       </div>
 
-      <div className='grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]'>
+      <div className='space-y-4'>
+        <div className='flex gap-3 overflow-x-auto pb-1'>
+          <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
+            <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Players in Pod</p>
+            <p className='mt-2 text-3xl font-bold'>{players.length}</p>
+            <p className='app-muted mt-2 text-sm'>Unique player tiles built from saved game history.</p>
+          </div>
+          <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
+            <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Decks Seen</p>
+            <p className='mt-2 text-3xl font-bold'>{totalCommanders}</p>
+            <p className='app-muted mt-2 text-sm'>{totalWins} total wins recorded across all players.</p>
+          </div>
+          <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
+            <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Most Played Commander</p>
+            <p className='mt-2 text-2xl font-bold'>{mostPopularCommander?.name ?? 'No commanders yet'}</p>
+            <p className='app-muted mt-2 text-sm'>
+              {mostPopularCommander ? `${mostPopularCommander.appearances} appearances` : 'Play a game to populate this card.'}
+            </p>
+          </div>
+        </div>
+
+        <div className='flex gap-3 overflow-x-auto pb-1'>
+          <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
+            <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Most Games</p>
+            <p className='mt-2 text-2xl font-bold'>{mostGamesPlayer?.name ?? 'No players yet'}</p>
+            <p className='app-muted mt-2 text-sm'>
+              {mostGamesPlayer ? `${mostGamesPlayer.gamesPlayed} games played` : 'Play a game to populate this card.'}
+            </p>
+          </div>
+          <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
+            <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Highest Win Rate</p>
+            <p className='mt-2 text-2xl font-bold'>{highestWinRatePlayer?.name ?? 'No players yet'}</p>
+            <p className='app-muted mt-2 text-sm'>
+              {highestWinRatePlayer ? `${formatWinRate(highestWinRatePlayer.winRate)} over ${highestWinRatePlayer.gamesPlayed} games` : 'Play a game to populate this card.'}
+            </p>
+          </div>
+          <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
+            <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Best Commander Win Rate</p>
+            <p className='mt-2 text-2xl font-bold'>{highestCommanderWinRate?.name ?? 'No commanders yet'}</p>
+            <p className='app-muted mt-2 text-sm'>
+              {highestCommanderWinRate
+                ? `${formatWinRate(highestCommanderWinRate.wins / highestCommanderWinRate.appearances)} over ${highestCommanderWinRate.appearances} games`
+                : 'Play a game to populate this card.'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className='max-w-xl'>
         <input
           type='text'
           value={searchValue}
           onChange={(event) => setSearchValue(event.target.value)}
           placeholder='Search players or commanders'
-          className='app-input'
+          className='app-input h-12 px-4 py-2 text-base'
         />
-        <div className='app-card'>
-          <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Players</p>
-          <p className='mt-2 text-3xl font-bold'>{players.length}</p>
-          <p className='app-muted mt-2 text-sm'>Unique player tiles built from saved game history.</p>
-        </div>
-        <div className='app-card'>
-          <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Decks Seen</p>
-          <p className='mt-2 text-3xl font-bold'>{totalCommanders}</p>
-          <p className='app-muted mt-2 text-sm'>{totalWins} total wins recorded across all players.</p>
-        </div>
       </div>
 
       {isLoading && <p className='wireframe-copy'>Loading player directory...</p>}
@@ -96,16 +232,20 @@ export default function PlayersPage() {
       )}
 
       {!isLoading && !error && filteredPlayers.length > 0 && (
-        <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
+        <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'>
           {filteredPlayers.map((player) => (
             <article key={player.id} className='player-tile app-card overflow-hidden text-left'>
               <div className='player-tile-art'>
                 {player.commanders.slice(0, 3).map((commander, index) => (
                   <div key={`${player.id}-${commander.name}`} className={`player-tile-art-card card-${index + 1}`}>
                     {commander.imageUrl ? (
-                      <img src={commander.imageUrl} alt={commander.name} className='player-tile-art-image' loading='lazy' />
+                      <a href={getScryfallSearchUrl(commander.name)} target='_blank' rel='noreferrer' className='block h-full w-full'>
+                        <img src={commander.imageUrl} alt={commander.name} className='player-tile-art-image' loading='lazy' />
+                      </a>
                     ) : (
-                      <span>{commander.name}</span>
+                      <a href={getScryfallSearchUrl(commander.name)} target='_blank' rel='noreferrer'>
+                        <span>{commander.name}</span>
+                      </a>
                     )}
                   </div>
                 ))}
@@ -113,8 +253,13 @@ export default function PlayersPage() {
 
               <div className='space-y-4'>
                 <div className='space-y-1'>
-                  <p className='app-muted text-xs font-bold uppercase tracking-[0.25em]'>Player Tile</p>
-                  <h2 className='text-2xl font-semibold'>{player.name}</h2>
+                  <button
+                    type='button'
+                    onClick={() => navigate(`/history?player=${encodeURIComponent(player.name)}`)}
+                    className='text-left text-2xl font-semibold transition hover:opacity-75'
+                  >
+                    {player.name}
+                  </button>
                   <p className='app-muted text-sm'>
                     Last seen in Game #{player.latestGameNumber} on {formatPlayedAt(player.latestPlayedAt)}
                   </p>
@@ -142,9 +287,15 @@ export default function PlayersPage() {
                   </div>
                   <div className='flex flex-wrap gap-2'>
                     {player.commanders.map((commander) => (
-                      <span key={`${player.id}-${commander.name}`} className='app-chip'>
+                      <a
+                        key={`${player.id}-${commander.name}`}
+                        href={getScryfallSearchUrl(commander.name)}
+                        target='_blank'
+                        rel='noreferrer'
+                        className='app-chip underline-offset-2 hover:underline'
+                      >
                         {commander.name} · {commander.appearances}
-                      </span>
+                      </a>
                     ))}
                   </div>
                 </div>

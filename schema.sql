@@ -196,6 +196,43 @@ after insert or update of is_winner, game_id, player_id or delete on public.game
 deferrable initially deferred
 for each row execute function public.enforce_game_winner_consistency();
 
+create or replace function public.set_game_winner(
+  p_game_id uuid,
+  p_winner_participant_id uuid default null
+)
+returns void
+language plpgsql
+as $$
+declare
+  v_winner_player_id uuid;
+begin
+  if p_winner_participant_id is not null then
+    select gp.player_id
+      into v_winner_player_id
+    from public.game_participants gp
+    where gp.game_id = p_game_id
+      and gp.id = p_winner_participant_id;
+  end if;
+
+  update public.game_participants
+  set is_winner = false
+  where game_id = p_game_id
+    and is_winner = true;
+
+  if p_winner_participant_id is not null then
+    update public.game_participants
+    set is_winner = true
+    where game_id = p_game_id
+      and id = p_winner_participant_id;
+  end if;
+
+  update public.games
+  set winner_participant_id = p_winner_participant_id,
+      winner_player_id = v_winner_player_id
+  where id = p_game_id;
+end;
+$$;
+
 -- Indexes
 create index if not exists idx_games_played_at on public.games(played_at);
 create index if not exists idx_game_participants_game_id on public.game_participants(game_id);
@@ -206,6 +243,7 @@ grant select, insert, update, delete on table public.players to anon, authentica
 grant select, insert, update, delete on table public.commanders to anon, authenticated;
 grant select, insert, update, delete on table public.games to anon, authenticated;
 grant select, insert, update, delete on table public.game_participants to anon, authenticated;
+grant execute on function public.set_game_winner(uuid, uuid) to anon, authenticated;
 
 -- Row Level Security
 alter table public.players enable row level security;

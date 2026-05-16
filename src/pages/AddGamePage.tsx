@@ -3,43 +3,39 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { CommanderAutocomplete } from '../components/CommanderAutocomplete';
 import { fetchAddGamePlayerSuggestions, fetchWinConditionSuggestions, type AddGamePlayerSuggestion } from '../lib/gameRecords';
+import { getScryfallSearchUrl } from '../lib/scryfall';
 import { supabase } from '../lib/supabase';
 import type { CommanderCard } from '../types/app';
 import type { ParticipantInput } from '../types/app';
 
 type AddGameFormValues = {
-  gameTitle: string;
   playedAt: string;
   playersCount: string;
   bracket: string;
+  finishedGame: boolean;
   winCondition: string;
   customWinCondition: string;
+  gameNotes: string;
 };
 
 const DEFAULT_WIN_CONDITIONS = ['Combat', 'Combo', 'Commander Damage', 'Other'] as const;
 const CUSTOM_WIN_CONDITION_VALUE = '__custom__';
+const UNFINISHED_GAME_WIN_CONDITION = 'Unfinished';
 
 function createParticipantSeat(seat: number): ParticipantInput {
   return {
     seat,
     playerName: '',
     primary: null,
-    isWinner: seat === 1,
+    isWinner: false,
   };
 }
 
 function syncParticipantsToPlayerCount(participants: ParticipantInput[], playersCount: number) {
-  const nextParticipants = Array.from({ length: playersCount }, (_, index) => {
+  return Array.from({ length: playersCount }, (_, index) => {
     const seat = index + 1;
     return participants.find((participant) => participant.seat === seat) ?? createParticipantSeat(seat);
   });
-
-  const winnerStillVisible = nextParticipants.some((participant) => participant.isWinner);
-  if (!winnerStillVisible && nextParticipants.length > 0) {
-    nextParticipants[0] = { ...nextParticipants[0], isWinner: true };
-  }
-
-  return nextParticipants;
 }
 
 function includesRuleText(card: CommanderCard | null | undefined, text: string) {
@@ -109,12 +105,13 @@ function normalizePlayerName(value: string) {
 export default function AddGamePage() {
   const { register, handleSubmit, watch, setValue } = useForm<AddGameFormValues>({
     defaultValues: {
-      gameTitle: '',
       playedAt: new Date().toISOString().slice(0, 10),
       playersCount: '4',
       bracket: '3',
+      finishedGame: true,
       winCondition: '',
       customWinCondition: '',
+      gameNotes: '',
     },
   });
   const navigate = useNavigate();
@@ -124,13 +121,25 @@ export default function AddGamePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const playersCount = parseInt(watch('playersCount') || '4', 10);
+  const finishedGame = watch('finishedGame');
   const winCondition = watch('winCondition');
   const customWinCondition = watch('customWinCondition');
-  const isAddingCustomWinCondition = winCondition === CUSTOM_WIN_CONDITION_VALUE;
+  const isAddingCustomWinCondition = finishedGame && winCondition === CUSTOM_WIN_CONDITION_VALUE;
 
   useEffect(() => {
     setParticipants((currentParticipants) => syncParticipantsToPlayerCount(currentParticipants, playersCount));
   }, [playersCount]);
+
+  useEffect(() => {
+    if (!finishedGame) {
+      setParticipants((currentParticipants) =>
+        currentParticipants.map((participant) => ({
+          ...participant,
+          isWinner: false,
+        })),
+      );
+    }
+  }, [finishedGame]);
 
   useEffect(() => {
     let isMounted = true;
@@ -239,7 +248,7 @@ export default function AddGamePage() {
     setParticipants((currentParticipants) =>
       currentParticipants.map((participant) => ({
         ...participant,
-        isWinner: participant.seat === seat,
+        isWinner: participant.seat === seat ? !participant.isWinner : false,
       })),
     );
   };
@@ -249,21 +258,18 @@ export default function AddGamePage() {
       setIsLoading(true);
       setError(null);
 
-      const resolvedWinCondition = formData.winCondition === CUSTOM_WIN_CONDITION_VALUE
-        ? formData.customWinCondition.trim()
-        : formData.winCondition.trim();
+      const resolvedWinCondition = formData.finishedGame
+        ? formData.winCondition === CUSTOM_WIN_CONDITION_VALUE
+          ? formData.customWinCondition.trim()
+          : formData.winCondition.trim()
+        : UNFINISHED_GAME_WIN_CONDITION;
 
       if (participants.some((participant) => !participant.playerName.trim() || !participant.primary)) {
         throw new Error('Please complete every player card with a name and commander before saving');
       }
 
-      if (!resolvedWinCondition) {
+      if (formData.finishedGame && !resolvedWinCondition) {
         throw new Error('Please choose a win condition before saving');
-      }
-
-      const winner = participants.find((participant) => participant.isWinner);
-      if (!winner) {
-        throw new Error('Please mark exactly one winner before saving');
       }
 
       const participantRows: Array<{
@@ -338,18 +344,18 @@ export default function AddGamePage() {
           playerId: playerData.id,
           primaryCommanderId: commanderData.id,
           secondaryCommanderId,
-          isWinner: participant.isWinner || false,
+          isWinner: formData.finishedGame ? participant.isWinner || false : false,
         });
       }
 
       let gameInsertResult = await supabase
         .from('games')
         .insert({
-          title: formData.gameTitle.trim() || null,
           played_at: formData.playedAt,
           number_of_players: parseInt(formData.playersCount, 10),
           bracket: parseInt(formData.bracket, 10),
           win_condition: resolvedWinCondition,
+          notes: formData.gameNotes.trim() || null,
         })
         .select()
         .single();
@@ -358,10 +364,10 @@ export default function AddGamePage() {
         gameInsertResult = await supabase
           .from('games')
           .insert({
-            title: formData.gameTitle.trim() || null,
             played_at: formData.playedAt,
             number_of_players: parseInt(formData.playersCount, 10),
             win_condition: resolvedWinCondition,
+            notes: formData.gameNotes.trim() || null,
           })
           .select()
           .single();
@@ -395,20 +401,18 @@ export default function AddGamePage() {
         insertedParticipants.push(insertedParticipant);
       }
 
-      const winnerParticipant = insertedParticipants.find((participant) => participant.is_winner);
-      if (!winnerParticipant) {
-        throw new Error('Winner row could not be resolved after saving participants');
+      const winnerParticipant = insertedParticipants.find((participant) => participant.is_winner) ?? null;
+      if (winnerParticipant) {
+        const { error: updateGameError } = await supabase
+          .from('games')
+          .update({
+            winner_player_id: winnerParticipant.player_id,
+            winner_participant_id: winnerParticipant.id,
+          })
+          .eq('id', gameData.id);
+
+        if (updateGameError) throw updateGameError;
       }
-
-      const { error: updateGameError } = await supabase
-        .from('games')
-        .update({
-          winner_player_id: winnerParticipant.player_id,
-          winner_participant_id: winnerParticipant.id,
-        })
-        .eq('id', gameData.id);
-
-      if (updateGameError) throw updateGameError;
 
       navigate('/history');
     } catch (err) {
@@ -423,7 +427,7 @@ export default function AddGamePage() {
       <form className='mx-auto flex w-full max-w-6xl flex-col gap-4' onSubmit={handleSubmit(handleSaveGame)}>
         <div className='flex flex-wrap items-start justify-between gap-3'>
           <div className='space-y-2 text-left'>
-            <h1 className='wireframe-title text-4xl md:text-6xl'>Log a Game</h1>
+            <h1 className='wireframe-title text-4xl md:text-6xl'>Add Game</h1>
             <p className='app-muted text-sm md:text-base'>Log the pod details up top, then fill in each active seat below.</p>
           </div>
 
@@ -438,60 +442,67 @@ export default function AddGamePage() {
         </div>
 
         <div className='grid w-full gap-3 text-left sm:grid-cols-2'>
-          <input
-            type='text'
-            className='app-input sm:col-span-2'
-            placeholder='Game title (optional)'
-            {...register('gameTitle')}
-          />
+          <div className='grid gap-3 sm:col-span-2 sm:grid-cols-2'>
+            <select className='app-input h-14 text-base md:text-lg' {...register('bracket', { required: true })}>
+              <option value='1'>Bracket 1</option>
+              <option value='2'>Bracket 2</option>
+              <option value='3'>Bracket 3</option>
+              <option value='4'>Bracket 4</option>
+              <option value='5'>Bracket 5</option>
+            </select>
 
-          <input type='date' className='app-input' {...register('playedAt', { required: true })} />
+            <label className='flex h-14 items-center gap-3 rounded-xl border px-3 py-2.5' style={{ background: 'var(--app-panel-soft)', borderColor: 'var(--app-border)' }}>
+              <input type='checkbox' className='h-5 w-5' {...register('finishedGame')} />
+              <span className='min-w-0 flex-1 text-sm font-semibold app-muted md:text-base'>Finished game</span>
+            </label>
+          </div>
 
-          <label className='flex items-center gap-3 rounded-xl border px-3 py-2.5' style={{ background: 'var(--app-panel-soft)', borderColor: 'var(--app-border)' }}>
+          <input type='date' className='app-input h-14 text-base md:text-lg' {...register('playedAt', { required: true })} />
+
+          <label className='flex h-14 items-center gap-3 rounded-xl border px-3 py-2.5' style={{ background: 'var(--app-panel-soft)', borderColor: 'var(--app-border)' }}>
             <span className='min-w-0 flex-1 text-sm font-semibold app-muted md:text-base'>Number of Seats</span>
-            <select className='app-input min-w-[8rem] !w-auto !p-2.5 text-base md:text-lg' {...register('playersCount', { required: true })}>
+            <select className='app-input flex-1 !p-2.5 text-base md:text-lg' {...register('playersCount', { required: true })}>
               <option value='2'>2</option>
               <option value='3'>3</option>
               <option value='4'>4</option>
             </select>
           </label>
 
-          <select className='app-input' {...register('bracket', { required: true })}>
-            <option value='1'>Bracket 1</option>
-            <option value='2'>Bracket 2</option>
-            <option value='3'>Bracket 3</option>
-            <option value='4'>Bracket 4</option>
-            <option value='5'>Bracket 5</option>
-          </select>
-
-          <select
-            className='app-input'
-            {...register('winCondition', {
-              required: true,
-              onChange: (event) => {
-                if (event.target.value !== CUSTOM_WIN_CONDITION_VALUE) {
-                  setValue('customWinCondition', '');
-                }
-              },
-            })}
-          >
-            <option value=''>Select win condition</option>
-            {availableWinConditions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-            <option value={CUSTOM_WIN_CONDITION_VALUE}>Add new win condition</option>
-          </select>
+          {finishedGame && (
+            <select
+              className='app-input h-14 text-base md:text-lg sm:col-span-2'
+              {...register('winCondition', {
+                onChange: (event) => {
+                  if (event.target.value !== CUSTOM_WIN_CONDITION_VALUE) {
+                    setValue('customWinCondition', '');
+                  }
+                },
+              })}
+            >
+              <option value=''>Select win condition</option>
+              {availableWinConditions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+              <option value={CUSTOM_WIN_CONDITION_VALUE}>Add new win condition</option>
+            </select>
+          )}
 
           {isAddingCustomWinCondition && (
             <input
               type='text'
-              className='app-input sm:col-span-2'
+              className='app-input h-14 text-base md:text-lg sm:col-span-2'
               placeholder='Enter a new win condition'
               {...register('customWinCondition', { required: isAddingCustomWinCondition })}
             />
           )}
+
+          <textarea
+            className='app-input min-h-[7rem] text-base md:text-lg sm:col-span-2'
+            placeholder='Game notes'
+            {...register('gameNotes')}
+          />
         </div>
 
         <div className='w-full space-y-3 text-left'>
@@ -509,26 +520,29 @@ export default function AddGamePage() {
               const playerCommanderSuggestions = matchingPlayer?.commanders ?? [];
 
               return (
-                <div key={participant.seat} className='app-card space-y-3 p-3.5'>
-                  <div className='flex items-start justify-between gap-3'>
-                    <div>
-                      <p className='app-muted text-xs font-bold uppercase tracking-[0.25em]'>Seat {participant.seat}</p>
-                      <h3 className='text-lg font-semibold'>Player {participant.seat}</h3>
-                    </div>
-
-                    <label className='app-card-soft flex items-center gap-2 rounded-full px-3 py-2 text-base font-semibold'>
-                      <input
-                        type='radio'
-                        name='winner'
-                        checked={Boolean(participant.isWinner)}
-                        onChange={() => handleWinnerChange(participant.seat)}
-                        className='h-4 w-4'
-                      />
-                      Winner
-                    </label>
+                <div key={participant.seat} className='app-card flex h-full flex-col gap-3 p-3.5'>
+                  <div className='flex items-center justify-between gap-3'>
+                    <p className='app-muted text-sm font-bold uppercase tracking-[0.25em] md:text-base'>Seat {participant.seat}</p>
+                    {finishedGame && (
+                      <label className='app-card-soft inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold'>
+                        <input
+                          type='checkbox'
+                          checked={Boolean(participant.isWinner)}
+                          onChange={() => handleWinnerChange(participant.seat)}
+                          className='h-4 w-4'
+                        />
+                        Winner
+                      </label>
+                    )}
                   </div>
 
-                  <div className='grid gap-3 md:grid-cols-[minmax(0,1fr)_11rem] md:items-start'>
+                  {matchingPlayer && (
+                    <p className='app-muted text-xs'>
+                      Suggestions loaded from {matchingPlayer.name}&apos;s saved game history.
+                    </p>
+                  )}
+
+                  <div className='grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_12rem] md:items-start'>
                     <div className='space-y-3'>
                       <input
                         type='text'
@@ -538,11 +552,6 @@ export default function AddGamePage() {
                         placeholder={`Seat ${participant.seat} player name`}
                         className='app-input-compact'
                       />
-                      {matchingPlayer && (
-                        <p className='app-muted text-xs'>
-                          Suggestions loaded from {matchingPlayer.name}&apos;s saved game history.
-                        </p>
-                      )}
 
                       <div className='space-y-2'>
                         <CommanderAutocomplete
@@ -554,7 +563,10 @@ export default function AddGamePage() {
                         {participant.primary ? (
                           <div className='app-card-soft flex items-center justify-between gap-3 px-3 py-2 text-sm'>
                             <p>
-                              <strong>Commander:</strong> {participant.primary.name}
+                              <strong>Commander:</strong>{' '}
+                              <a href={getScryfallSearchUrl(participant.primary.name)} target='_blank' rel='noreferrer' className='underline underline-offset-2'>
+                                {participant.primary.name}
+                              </a>
                             </p>
                             <button
                               type='button'
@@ -582,7 +594,10 @@ export default function AddGamePage() {
                           {participant.secondary ? (
                             <div className='app-card-soft flex items-center justify-between gap-3 px-3 py-2 text-sm'>
                               <p>
-                                <strong>{getSecondaryMode(participant.primary) === 'backgrounds' ? 'Background:' : 'Second commander:'}</strong> {participant.secondary.name}
+                                <strong>{getSecondaryMode(participant.primary) === 'backgrounds' ? 'Background:' : 'Second commander:'}</strong>{' '}
+                                <a href={getScryfallSearchUrl(participant.secondary.name)} target='_blank' rel='noreferrer' className='underline underline-offset-2'>
+                                  {participant.secondary.name}
+                                </a>
                               </p>
                               <button
                                 type='button'
@@ -603,21 +618,37 @@ export default function AddGamePage() {
                       )}
                     </div>
 
-                    <div className='commander-stage md:sticky md:top-3'>
+                    <div className='commander-stage min-h-[16rem] md:min-h-[17rem]'>
                       <div className={`commander-stage-stack${participant.secondary ? ' has-secondary' : ''}`}>
-                        <div
-                          className={`commander-stage-card primary${participant.primary?.imageUrl ? ' filled' : ''}`}
-                          style={participant.primary?.imageUrl ? { backgroundImage: `url(${participant.primary.imageUrl})` } : undefined}
-                        >
-                          {!participant.primary?.imageUrl && <span>Commander art</span>}
+                        <div className={`commander-stage-card primary${participant.primary?.imageUrl ? ' filled' : ''}`}>
+                          {participant.primary?.imageUrl ? (
+                            <a href={getScryfallSearchUrl(participant.primary.name)} target='_blank' rel='noreferrer' className='block h-full w-full'>
+                              <img
+                                src={participant.primary.imageUrl}
+                                alt={participant.primary.name}
+                                className='commander-stage-image'
+                                loading='lazy'
+                              />
+                            </a>
+                          ) : (
+                            <span>Commander art</span>
+                          )}
                         </div>
 
                         {(getSecondaryMode(participant.primary) || participant.secondary) && (
-                          <div
-                            className={`commander-stage-card secondary${participant.secondary?.imageUrl ? ' filled' : ''}`}
-                            style={participant.secondary?.imageUrl ? { backgroundImage: `url(${participant.secondary.imageUrl})` } : undefined}
-                          >
-                            {!participant.secondary?.imageUrl && <span>Second card</span>}
+                          <div className={`commander-stage-card secondary${participant.secondary?.imageUrl ? ' filled' : ''}`}>
+                            {participant.secondary?.imageUrl ? (
+                              <a href={getScryfallSearchUrl(participant.secondary.name)} target='_blank' rel='noreferrer' className='block h-full w-full'>
+                                <img
+                                  src={participant.secondary.imageUrl}
+                                  alt={participant.secondary.name}
+                                  className='commander-stage-image'
+                                  loading='lazy'
+                                />
+                              </a>
+                            ) : (
+                              <span>Second card</span>
+                            )}
                           </div>
                         )}
                       </div>

@@ -16,6 +16,10 @@ function toCommanderCard(card: any): CommanderCard {
   };
 }
 
+export function getScryfallSearchUrl(name: string) {
+  return `https://scryfall.com/search?q=${encodeURIComponent(`!"${name}"`)}`;
+}
+
 export async function searchCommanders(q: string) {
   const tryQuery = async (filter: string) => fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(`${q} ${filter}`)}`).then(r => r.ok ? r.json() : ({ data: [] }));
   let result = await tryQuery(strict);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { CommanderAutocomplete } from '../components/CommanderAutocomplete';
+import { fetchAddGamePlayerSuggestions, fetchWinConditionSuggestions, type AddGamePlayerSuggestion } from '../lib/gameRecords';
 import { supabase } from '../lib/supabase';
 import type { CommanderCard } from '../types/app';
 import type { ParticipantInput } from '../types/app';
@@ -12,7 +13,11 @@ type AddGameFormValues = {
   playersCount: string;
   bracket: string;
   winCondition: string;
+  customWinCondition: string;
 };
+
+const DEFAULT_WIN_CONDITIONS = ['Combat', 'Combo', 'Commander Damage', 'Other'] as const;
+const CUSTOM_WIN_CONDITION_VALUE = '__custom__';
 
 function createParticipantSeat(seat: number): ParticipantInput {
   return {
@@ -97,27 +102,69 @@ function isMissingBracketColumnError(error: unknown) {
   return (code === 'PGRST204' || code === '42703') && message.includes('bracket');
 }
 
+function normalizePlayerName(value: string) {
+  return value.trim().toLowerCase();
+}
+
 export default function AddGamePage() {
-  const { register, handleSubmit, watch } = useForm<AddGameFormValues>({
+  const { register, handleSubmit, watch, setValue } = useForm<AddGameFormValues>({
     defaultValues: {
       gameTitle: '',
       playedAt: new Date().toISOString().slice(0, 10),
       playersCount: '4',
       bracket: '3',
       winCondition: '',
+      customWinCondition: '',
     },
   });
   const navigate = useNavigate();
   const [participants, setParticipants] = useState<ParticipantInput[]>(() => Array.from({ length: 4 }, (_, index) => createParticipantSeat(index + 1)));
+  const [playerSuggestions, setPlayerSuggestions] = useState<AddGamePlayerSuggestion[]>([]);
+  const [winConditionSuggestions, setWinConditionSuggestions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const playersCount = parseInt(watch('playersCount') || '4', 10);
+  const winCondition = watch('winCondition');
+  const customWinCondition = watch('customWinCondition');
+  const isAddingCustomWinCondition = winCondition === CUSTOM_WIN_CONDITION_VALUE;
 
   useEffect(() => {
     setParticipants((currentParticipants) => syncParticipantsToPlayerCount(currentParticipants, playersCount));
   }, [playersCount]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPlayerSuggestions() {
+      try {
+        const [nextSuggestions, nextWinConditions] = await Promise.all([
+          fetchAddGamePlayerSuggestions(),
+          fetchWinConditionSuggestions(),
+        ]);
+        if (isMounted) {
+          setPlayerSuggestions(nextSuggestions);
+          setWinConditionSuggestions(nextWinConditions);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load player suggestions');
+        }
+      }
+    }
+
+    loadPlayerSuggestions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const hasIncompleteSeat = participants.some((participant) => !participant.playerName.trim() || !participant.primary);
+  const playerNameOptions = playerSuggestions.map((player) => player.name);
+  const availableWinConditions = [...new Set([...DEFAULT_WIN_CONDITIONS, ...winConditionSuggestions])];
+
+  const findMatchingPlayerSuggestion = (playerName: string) =>
+    playerSuggestions.find((player) => normalizePlayerName(player.name) === normalizePlayerName(playerName)) ?? null;
 
   const handlePlayerNameChange = (seat: number, playerName: string) => {
     setParticipants((currentParticipants) =>
@@ -202,8 +249,16 @@ export default function AddGamePage() {
       setIsLoading(true);
       setError(null);
 
+      const resolvedWinCondition = formData.winCondition === CUSTOM_WIN_CONDITION_VALUE
+        ? formData.customWinCondition.trim()
+        : formData.winCondition.trim();
+
       if (participants.some((participant) => !participant.playerName.trim() || !participant.primary)) {
         throw new Error('Please complete every player card with a name and commander before saving');
+      }
+
+      if (!resolvedWinCondition) {
+        throw new Error('Please choose a win condition before saving');
       }
 
       const winner = participants.find((participant) => participant.isWinner);
@@ -294,7 +349,7 @@ export default function AddGamePage() {
           played_at: formData.playedAt,
           number_of_players: parseInt(formData.playersCount, 10),
           bracket: parseInt(formData.bracket, 10),
-          win_condition: formData.winCondition,
+          win_condition: resolvedWinCondition,
         })
         .select()
         .single();
@@ -306,7 +361,7 @@ export default function AddGamePage() {
             title: formData.gameTitle.trim() || null,
             played_at: formData.playedAt,
             number_of_players: parseInt(formData.playersCount, 10),
-            win_condition: formData.winCondition,
+            win_condition: resolvedWinCondition,
           })
           .select()
           .single();
@@ -364,44 +419,82 @@ export default function AddGamePage() {
   };
 
   return (
-    <section className='wireframe-shell'>
-      <form className='mx-auto flex w-full max-w-5xl flex-col items-center space-y-4 text-center' onSubmit={handleSubmit(handleSaveGame)}>
-        <h1 className='wireframe-title'>Add Game</h1>
+    <section className='wireframe-shell px-5 py-6 md:px-8 md:py-7'>
+      <form className='mx-auto flex w-full max-w-6xl flex-col gap-4' onSubmit={handleSubmit(handleSaveGame)}>
+        <div className='flex flex-wrap items-start justify-between gap-3'>
+          <div className='space-y-2 text-left'>
+            <h1 className='wireframe-title text-4xl md:text-6xl'>Log a Game</h1>
+            <p className='app-muted text-sm md:text-base'>Log the pod details up top, then fill in each active seat below.</p>
+          </div>
 
-        <input
-          type='text'
-          className='app-input'
-          placeholder='Game title (optional)'
-          {...register('gameTitle')}
-        />
+          <button
+            type='submit'
+            disabled={isLoading || hasIncompleteSeat}
+            className='rounded-full border px-6 py-2.5 text-lg font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 md:px-8 md:text-xl'
+            style={{ background: '#18181b', borderColor: 'var(--app-border)' }}
+          >
+            {isLoading ? 'Saving...' : 'Save Game'}
+          </button>
+        </div>
 
-        <input type='date' className='app-input' {...register('playedAt', { required: true })} />
+        <div className='grid w-full gap-3 text-left sm:grid-cols-2'>
+          <input
+            type='text'
+            className='app-input sm:col-span-2'
+            placeholder='Game title (optional)'
+            {...register('gameTitle')}
+          />
 
-        <input
-          type='number'
-          min={2}
-          max={4}
-          className='app-input'
-          {...register('playersCount', { required: true, min: 2, max: 4 })}
-        />
+          <input type='date' className='app-input' {...register('playedAt', { required: true })} />
 
-        <select className='app-input' {...register('bracket', { required: true })}>
-          <option value='1'>Bracket 1</option>
-          <option value='2'>Bracket 2</option>
-          <option value='3'>Bracket 3</option>
-          <option value='4'>Bracket 4</option>
-          <option value='5'>Bracket 5</option>
-        </select>
+          <label className='flex items-center gap-3 rounded-xl border px-3 py-2.5' style={{ background: 'var(--app-panel-soft)', borderColor: 'var(--app-border)' }}>
+            <span className='min-w-0 flex-1 text-sm font-semibold app-muted md:text-base'>Number of Seats</span>
+            <select className='app-input min-w-[8rem] !w-auto !p-2.5 text-base md:text-lg' {...register('playersCount', { required: true })}>
+              <option value='2'>2</option>
+              <option value='3'>3</option>
+              <option value='4'>4</option>
+            </select>
+          </label>
 
-        <select className='app-input' {...register('winCondition', { required: true })}>
-          <option value=''>Select win condition</option>
-          <option value='Combat'>Combat</option>
-          <option value='Combo'>Combo</option>
-          <option value='Commander Damage'>Commander Damage</option>
-          <option value='Other'>Other</option>
-        </select>
+          <select className='app-input' {...register('bracket', { required: true })}>
+            <option value='1'>Bracket 1</option>
+            <option value='2'>Bracket 2</option>
+            <option value='3'>Bracket 3</option>
+            <option value='4'>Bracket 4</option>
+            <option value='5'>Bracket 5</option>
+          </select>
 
-        <div className='w-full space-y-4 text-left'>
+          <select
+            className='app-input'
+            {...register('winCondition', {
+              required: true,
+              onChange: (event) => {
+                if (event.target.value !== CUSTOM_WIN_CONDITION_VALUE) {
+                  setValue('customWinCondition', '');
+                }
+              },
+            })}
+          >
+            <option value=''>Select win condition</option>
+            {availableWinConditions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+            <option value={CUSTOM_WIN_CONDITION_VALUE}>Add new win condition</option>
+          </select>
+
+          {isAddingCustomWinCondition && (
+            <input
+              type='text'
+              className='app-input sm:col-span-2'
+              placeholder='Enter a new win condition'
+              {...register('customWinCondition', { required: isAddingCustomWinCondition })}
+            />
+          )}
+        </div>
+
+        <div className='w-full space-y-3 text-left'>
           <div className='flex flex-wrap items-end justify-between gap-3'>
             <div>
               <h2 className='text-2xl font-semibold'>Player Grid</h2>
@@ -410,124 +503,139 @@ export default function AddGamePage() {
             <p className='app-chip'>{playersCount} seats active</p>
           </div>
 
-          <div className='grid gap-4 md:grid-cols-2'>
-            {participants.map((participant) => (
-              <div key={participant.seat} className='app-card space-y-4'>
-                <div className='flex items-start justify-between gap-3'>
-                  <div>
-                    <p className='app-muted text-xs font-bold uppercase tracking-[0.25em]'>Seat {participant.seat}</p>
-                    <h3 className='text-xl font-semibold'>Player {participant.seat}</h3>
-                  </div>
+          <div className='grid gap-3 md:grid-cols-2'>
+            {participants.map((participant) => {
+              const matchingPlayer = findMatchingPlayerSuggestion(participant.playerName);
+              const playerCommanderSuggestions = matchingPlayer?.commanders ?? [];
 
-                  <label className='app-muted flex items-center gap-2 text-sm font-semibold'>
-                    <input
-                      type='radio'
-                      name='winner'
-                      checked={Boolean(participant.isWinner)}
-                      onChange={() => handleWinnerChange(participant.seat)}
-                    />
-                    Winner
-                  </label>
-                </div>
-
-                <input
-                  type='text'
-                  value={participant.playerName}
-                  onChange={(event) => handlePlayerNameChange(participant.seat, event.target.value)}
-                  placeholder={`Seat ${participant.seat} player name`}
-                  className='app-input-compact'
-                />
-
-                <div className='commander-stage'>
-                  <div className={`commander-stage-stack${participant.secondary ? ' has-secondary' : ''}`}>
-                    <div
-                      className={`commander-stage-card primary${participant.primary?.imageUrl ? ' filled' : ''}`}
-                      style={participant.primary?.imageUrl ? { backgroundImage: `url(${participant.primary.imageUrl})` } : undefined}
-                    >
-                      {!participant.primary?.imageUrl && <span>Commander art</span>}
+              return (
+                <div key={participant.seat} className='app-card space-y-3 p-3.5'>
+                  <div className='flex items-start justify-between gap-3'>
+                    <div>
+                      <p className='app-muted text-xs font-bold uppercase tracking-[0.25em]'>Seat {participant.seat}</p>
+                      <h3 className='text-lg font-semibold'>Player {participant.seat}</h3>
                     </div>
 
-                    {(getSecondaryMode(participant.primary) || participant.secondary) && (
-                      <div
-                        className={`commander-stage-card secondary${participant.secondary?.imageUrl ? ' filled' : ''}`}
-                        style={participant.secondary?.imageUrl ? { backgroundImage: `url(${participant.secondary.imageUrl})` } : undefined}
-                      >
-                        {!participant.secondary?.imageUrl && <span>Second card</span>}
-                      </div>
-                    )}
+                    <label className='app-card-soft flex items-center gap-2 rounded-full px-3 py-2 text-base font-semibold'>
+                      <input
+                        type='radio'
+                        name='winner'
+                        checked={Boolean(participant.isWinner)}
+                        onChange={() => handleWinnerChange(participant.seat)}
+                        className='h-4 w-4'
+                      />
+                      Winner
+                    </label>
                   </div>
-                </div>
 
-                <div className='space-y-2'>
-                  <CommanderAutocomplete
-                    value={participant.primary?.name ?? ''}
-                    onSelect={(commander) => handleCommanderChange(participant.seat, commander)}
-                  />
-
-                  {participant.primary ? (
-                    <div className='app-card-soft flex items-center justify-between gap-3 px-3 py-2 text-sm'>
-                      <p>
-                        <strong>Commander:</strong> {participant.primary.name}
-                      </p>
-                      <button
-                        type='button'
-                        className='font-semibold text-red-600 hover:text-red-800'
-                        onClick={() => handleCommanderClear(participant.seat)}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  ) : (
-                    <p className='app-muted text-sm'>Choose a commander for this seat.</p>
-                  )}
-                </div>
-
-                {getSecondaryMode(participant.primary) && (
-                  <div className='space-y-2'>
-                    <CommanderAutocomplete
-                      value={participant.secondary?.name ?? ''}
-                      searchMode={getSecondaryMode(participant.primary) ?? 'commanders'}
-                      placeholder={getSecondaryMode(participant.primary) === 'backgrounds' ? 'Search background' : 'Search second commander'}
-                      onSelect={(commander) => handleSecondaryCommanderChange(participant.seat, commander)}
-                    />
-
-                    {participant.secondary ? (
-                      <div className='app-card-soft flex items-center justify-between gap-3 px-3 py-2 text-sm'>
-                        <p>
-                          <strong>{getSecondaryMode(participant.primary) === 'backgrounds' ? 'Background:' : 'Second commander:'}</strong> {participant.secondary.name}
+                  <div className='grid gap-3 md:grid-cols-[minmax(0,1fr)_11rem] md:items-start'>
+                    <div className='space-y-3'>
+                      <input
+                        type='text'
+                        list='player-name-suggestions'
+                        value={participant.playerName}
+                        onChange={(event) => handlePlayerNameChange(participant.seat, event.target.value)}
+                        placeholder={`Seat ${participant.seat} player name`}
+                        className='app-input-compact'
+                      />
+                      {matchingPlayer && (
+                        <p className='app-muted text-xs'>
+                          Suggestions loaded from {matchingPlayer.name}&apos;s saved game history.
                         </p>
-                        <button
-                          type='button'
-                          className='font-semibold text-red-600 hover:text-red-800'
-                          onClick={() => handleSecondaryCommanderClear(participant.seat)}
-                        >
-                          Clear
-                        </button>
+                      )}
+
+                      <div className='space-y-2'>
+                        <CommanderAutocomplete
+                          value={participant.primary?.name ?? ''}
+                          onSelect={(commander) => handleCommanderChange(participant.seat, commander)}
+                          suggestedItems={playerCommanderSuggestions}
+                        />
+
+                        {participant.primary ? (
+                          <div className='app-card-soft flex items-center justify-between gap-3 px-3 py-2 text-sm'>
+                            <p>
+                              <strong>Commander:</strong> {participant.primary.name}
+                            </p>
+                            <button
+                              type='button'
+                              className='font-semibold text-red-600 hover:text-red-800'
+                              onClick={() => handleCommanderClear(participant.seat)}
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        ) : (
+                          <p className='app-muted text-sm'>Choose a commander for this seat.</p>
+                        )}
                       </div>
-                    ) : (
-                      <p className='app-muted text-sm'>
-                        {getSecondaryMode(participant.primary) === 'backgrounds'
-                          ? 'This commander can pair with a Background.'
-                          : 'This commander can pair with a second commander.'}
-                      </p>
-                    )}
+
+                      {getSecondaryMode(participant.primary) && (
+                        <div className='space-y-2'>
+                          <CommanderAutocomplete
+                            value={participant.secondary?.name ?? ''}
+                            searchMode={getSecondaryMode(participant.primary) ?? 'commanders'}
+                            placeholder={getSecondaryMode(participant.primary) === 'backgrounds' ? 'Search background' : 'Search second commander'}
+                            onSelect={(commander) => handleSecondaryCommanderChange(participant.seat, commander)}
+                            suggestedItems={playerCommanderSuggestions}
+                          />
+
+                          {participant.secondary ? (
+                            <div className='app-card-soft flex items-center justify-between gap-3 px-3 py-2 text-sm'>
+                              <p>
+                                <strong>{getSecondaryMode(participant.primary) === 'backgrounds' ? 'Background:' : 'Second commander:'}</strong> {participant.secondary.name}
+                              </p>
+                              <button
+                                type='button'
+                                className='font-semibold text-red-600 hover:text-red-800'
+                                onClick={() => handleSecondaryCommanderClear(participant.seat)}
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          ) : (
+                            <p className='app-muted text-sm'>
+                              {getSecondaryMode(participant.primary) === 'backgrounds'
+                                ? 'This commander can pair with a Background.'
+                                : 'This commander can pair with a second commander.'}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className='commander-stage md:sticky md:top-3'>
+                      <div className={`commander-stage-stack${participant.secondary ? ' has-secondary' : ''}`}>
+                        <div
+                          className={`commander-stage-card primary${participant.primary?.imageUrl ? ' filled' : ''}`}
+                          style={participant.primary?.imageUrl ? { backgroundImage: `url(${participant.primary.imageUrl})` } : undefined}
+                        >
+                          {!participant.primary?.imageUrl && <span>Commander art</span>}
+                        </div>
+
+                        {(getSecondaryMode(participant.primary) || participant.secondary) && (
+                          <div
+                            className={`commander-stage-card secondary${participant.secondary?.imageUrl ? ' filled' : ''}`}
+                            style={participant.secondary?.imageUrl ? { backgroundImage: `url(${participant.secondary.imageUrl})` } : undefined}
+                          >
+                            {!participant.secondary?.imageUrl && <span>Second card</span>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
 
           {error && <p className='text-sm text-red-600'>{error}</p>}
         </div>
 
-        <button
-          type='submit'
-          disabled={isLoading || hasIncompleteSeat}
-          className='rounded-full border px-8 py-3 text-2xl font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50'
-          style={{ background: '#18181b', borderColor: 'var(--app-border)' }}
-        >
-          {isLoading ? 'Saving...' : 'Save Game'}
-        </button>
+        <datalist id='player-name-suggestions'>
+          {playerNameOptions.map((playerName) => (
+            <option key={playerName} value={playerName} />
+          ))}
+        </datalist>
       </form>
     </section>
   );

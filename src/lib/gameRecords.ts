@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { CommanderCard } from '../types/app';
 
 export type HistoryGameParticipant = {
   id: string;
@@ -50,6 +51,39 @@ export type PlayerDirectoryEntry = {
     appearances: number;
   }>;
 };
+
+type CommanderRow = {
+  scryfall_id: string | null;
+  name: string;
+  image_url: string | null;
+  color_identity: string[] | null;
+  type_line: string | null;
+  oracle_text: string | null;
+};
+
+export type AddGamePlayerSuggestion = {
+  id: string;
+  name: string;
+  commanders: Array<
+    CommanderCard & {
+      appearances: number;
+    }
+  >;
+};
+
+export async function fetchWinConditionSuggestions() {
+  const { data, error } = await supabase
+    .from('games')
+    .select('win_condition')
+    .not('win_condition', 'is', null);
+
+  if (error) {
+    throw error;
+  }
+
+  return [...new Set((data ?? []).map((row) => row.win_condition?.trim()).filter((value): value is string => Boolean(value)))]
+    .sort((left, right) => left.localeCompare(right));
+}
 
 function toNumberedGames(games: HistoryGame[]) {
   const chronological = [...games].sort((left, right) => {
@@ -277,6 +311,105 @@ export async function fetchPlayerDirectory() {
 
       return left.name.localeCompare(right.name);
     });
+}
+
+function toCommanderCardSuggestion(commander: CommanderRow): CommanderCard {
+  return {
+    scryfallId: commander.scryfall_id ?? commander.name,
+    name: commander.name,
+    imageUrl: commander.image_url ?? undefined,
+    colorIdentity: commander.color_identity ?? [],
+    typeLine: commander.type_line ?? undefined,
+    oracleText: commander.oracle_text ?? undefined,
+  };
+}
+
+export async function fetchAddGamePlayerSuggestions() {
+  const { data, error } = await supabase
+    .from('game_participants')
+    .select(`
+      player:players (
+        id,
+        name
+      ),
+      primary_commander:commanders!game_participants_primary_commander_id_fkey (
+        scryfall_id,
+        name,
+        image_url,
+        color_identity,
+        type_line,
+        oracle_text
+      ),
+      secondary_commander:commanders!game_participants_secondary_commander_id_fkey (
+        scryfall_id,
+        name,
+        image_url,
+        color_identity,
+        type_line,
+        oracle_text
+      )
+    `);
+
+  if (error) {
+    throw error;
+  }
+
+  const playerMap = new Map<string, AddGamePlayerSuggestion>();
+
+  for (const participant of data ?? []) {
+    const player = Array.isArray(participant.player) ? participant.player[0] : participant.player;
+    const primaryCommander = Array.isArray(participant.primary_commander) ? participant.primary_commander[0] : participant.primary_commander;
+    const secondaryCommander = Array.isArray(participant.secondary_commander) ? participant.secondary_commander[0] : participant.secondary_commander;
+
+    if (!player) {
+      continue;
+    }
+
+    const existingPlayer: AddGamePlayerSuggestion = playerMap.get(player.id) ?? {
+      id: player.id,
+      name: player.name,
+      commanders: [],
+    };
+
+    const commanderMap = new Map(existingPlayer.commanders.map((commander) => [commander.scryfallId || commander.name, commander]));
+
+    for (const commander of [primaryCommander, secondaryCommander] as Array<CommanderRow | null | undefined>) {
+      if (!commander) {
+        continue;
+      }
+
+      const key = commander.scryfall_id ?? commander.name;
+      const existingCommander = commanderMap.get(key);
+      if (existingCommander) {
+        existingCommander.appearances += 1;
+        if (!existingCommander.imageUrl && commander.image_url) {
+          existingCommander.imageUrl = commander.image_url;
+        }
+      } else {
+        const nextCommander = {
+          ...toCommanderCardSuggestion(commander),
+          appearances: 1,
+        };
+        existingPlayer.commanders.push(nextCommander);
+        commanderMap.set(key, nextCommander);
+      }
+    }
+
+    playerMap.set(player.id, existingPlayer);
+  }
+
+  return [...playerMap.values()]
+    .map((player) => ({
+      ...player,
+      commanders: [...player.commanders].sort((left, right) => {
+        if (right.appearances !== left.appearances) {
+          return right.appearances - left.appearances;
+        }
+
+        return left.name.localeCompare(right.name);
+      }),
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export function readSingleName(value: { name: string } | { name: string }[] | null) {

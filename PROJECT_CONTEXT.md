@@ -5,12 +5,17 @@
 - The app is a no-login MTG Commander tracker backed directly by a live Supabase project.
 - Navigation uses a left sidebar with a persisted light/dark theme toggle.
 - The dashboard, history, and players pages all read live data from Supabase through `src/lib/gameRecords.ts`.
-- The Add Game page supports multi-seat entry, optional game titles, bracket selection, and two-card commander setups for partner/background-style pairings.
+- The Add Game page now presents a tighter `Log a Game` layout with a header save action, labeled seat-count selector, reusable win-condition suggestions, player-name autocomplete, player-specific commander suggestions, and two-card commander setups for partner/background-style pairings.
 - The Game History page supports inline title editing, player-name filtering, per-seat commander thumbnails, and bracket display for each saved game.
 - The Players page now renders one tile per unique player with search by player name or commander name.
 
 ## Recent Work
 
+- Tightened the Add Game page layout by moving save into the header, compressing form spacing, and shifting each seat card to a two-column input-plus-art layout with a larger winner toggle.
+- Renamed the Add Game screen title to `Log a Game` and replaced the player-count number input with a labeled `Number of Seats` dropdown.
+- Added player-name autocomplete on Add Game using saved players from Supabase.
+- Added player-specific commander suggestions on Add Game so matching players see commanders from their saved game history while still being able to search and add new commanders from Scryfall.
+- Added reusable win-condition suggestions sourced from saved games plus an `Add new win condition` path that stores custom values for future games.
 - Added `games.bracket` support to the schema, Add Game flow, Game History display, shared game reads, and sample seed data.
 - Applied the `games.bracket` schema update directly to the linked Supabase project and verified the live column/default/check constraint through the Supabase Management API.
 - Added a compatibility fallback so localhost still reads and writes games against older schemas that do not yet expose the `bracket` column.
@@ -24,23 +29,25 @@
 
 ## Recent Commits
 
+- `bb2eb6c` - `Add game bracket tracking`
 - `ef99e0e` - `Add commander card previews and refresh project context`
 - `ac29db7` - `Add sidebar theme toggle and live game tracking UI`
 - `a504d6d` - `Convert tracker to no-login Supabase app`
-- `cabf2a0` - `Add game save flow and upgrade Vite tooling`
 
 ## Key Files
 
 - `src/pages/AddGamePage.tsx`
-  Multi-seat game entry, title capture, bracket selection, secondary commander logic, and save flow.
+  Multi-seat game entry, title capture, bracket selection, seat-count selector, reusable win-condition flow, player-name autocomplete, player-specific commander suggestions, secondary commander logic, and save flow.
 - `src/pages/GameHistoryPage.tsx`
   History list, inline title editing, player filtering, per-seat commander thumbnails, and bracket display.
 - `src/pages/PlayersPage.tsx`
   Searchable player directory with per-player commander tiles and summary stats.
 - `src/lib/gameRecords.ts`
-  Shared Supabase reads plus numbered game and player-directory aggregation helpers, including bracket compatibility fallback.
+  Shared Supabase reads plus numbered game aggregation, player-directory helpers, add-game player suggestion helpers, and win-condition suggestion helpers, including bracket compatibility fallback.
+- `src/components/CommanderAutocomplete.tsx`
+  Commander search UI that now merges player-history suggestions with live Scryfall results.
 - `src/index.css`
-  Theme variables plus commander layout styling for add-game, history, and player tiles.
+  Theme variables plus tightened commander layout styling for add-game, history, and player tiles.
 - `schema.sql`
   Current Supabase schema, including `games.title`, `games.bracket`, and winner consistency trigger logic.
 - `scripts/seedSampleGames.mjs`
@@ -60,6 +67,7 @@
 
 - `npm test -- --run` passes with the current worktree.
 - `npm run build` passes with the current worktree.
+- Add Game layout, player-history suggestions, and reusable win-condition flow were verified locally through a successful production build.
 - Live Supabase reads were rechecked for counts, bracket presence, and recent game payloads after the latest bracket work.
 - The linked Supabase project now reports `public.games.bracket` as `integer`, `NOT NULL`, default `3`, with a `1..5` check constraint.
 

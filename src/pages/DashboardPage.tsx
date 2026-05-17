@@ -16,6 +16,13 @@ function formatPlayedAt(value: string) {
   }).format(new Date(`${value}T00:00:00`));
 }
 
+function formatSeatOrder(game: NumberedHistoryGame) {
+  return [...game.game_participants]
+    .sort((left, right) => left.turn_order_position - right.turn_order_position)
+    .map((participant) => readSingleName(participant.player))
+    .join(' · ');
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
@@ -52,23 +59,11 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const latestWinner = snapshot?.latestGame?.game_participants.find((participant) => participant.is_winner) ?? null;
-
   return (
     <section className='wireframe-shell'>
       <div className='space-y-6'>
-        <div className='flex flex-wrap items-start justify-between gap-4'>
-          <div className='space-y-2'>
-            <h1 className='wireframe-title'>Pod Highlights</h1>
-          </div>
-          <Link to='/add-game' className='app-card dashboard-add-game-card dashboard-header-add-game'>
-            <div className='dashboard-add-game-row'>
-              <div className='dashboard-add-game-plus' aria-hidden='true'>
-                +
-              </div>
-              <p className='dashboard-add-game-label'>Add Game</p>
-            </div>
-          </Link>
+        <div className='space-y-2'>
+          <h1 className='wireframe-title'>Pod Highlights</h1>
         </div>
 
         {isLoading && <p className='wireframe-copy'>Loading tracker summary...</p>}
@@ -92,27 +87,14 @@ export default function DashboardPage() {
                 <p className='dashboard-stat-value'>{snapshot.totalCommanders}</p>
               </Link>
 
-              {snapshot.latestGame && (
-                <Link
-                  to={`/history?game=${encodeURIComponent(snapshot.latestGame.id)}`}
-                  className='app-card dashboard-link-card dashboard-feature-card text-left'
-                >
-                  <p className='app-muted text-sm font-semibold uppercase tracking-[0.2em]'>Latest Game</p>
-                  <div className='mt-2 flex flex-1 flex-wrap items-center justify-between gap-3'>
-                    <div>
-                      <h2 className='text-xl font-semibold'>Game #{snapshot.latestGame.gameNumber}</h2>
-                      <p className='app-muted text-sm'>
-                        {formatPlayedAt(snapshot.latestGame.played_at)} · {snapshot.latestGame.number_of_players} players · {snapshot.latestGame.win_condition}
-                      </p>
-                    </div>
-                    {latestWinner && (
-                      <div className='rounded-full border border-emerald-700 px-4 py-2 text-sm font-semibold text-emerald-700'>
-                        Winner: {readSingleName(latestWinner.player)}
-                      </div>
-                    )}
+              <Link to='/add-game' className='app-card dashboard-link-card dashboard-add-game-card dashboard-grid-add-game'>
+                <div className='dashboard-add-game-row'>
+                  <div className='dashboard-add-game-plus' aria-hidden='true'>
+                    +
                   </div>
-                </Link>
-              )}
+                  <p className='dashboard-add-game-label'>Add Game</p>
+                </div>
+              </Link>
             </div>
 
             <div className='app-card text-left'>
@@ -137,14 +119,31 @@ export default function DashboardPage() {
                         >
                           <div className='flex flex-wrap items-center justify-between gap-3'>
                             <div>
-                              <p className='font-semibold'>Game #{game.gameNumber}</p>
-                              <p className='app-muted text-sm'>
-                                {formatPlayedAt(game.played_at)} · {game.win_condition}
-                              </p>
+                              <div className='dashboard-recent-game-details'>
+                                <p className='dashboard-recent-game-meta'>
+                                  <span className='font-semibold text-[color:var(--app-text)]'>Game #{game.gameNumber}</span>
+                                  <span className='dashboard-recent-game-dash' aria-hidden='true'>
+                                    -
+                                  </span>
+                                  <span>{formatPlayedAt(game.played_at)}</span>
+                                  <span className='dashboard-recent-game-separator' aria-hidden='true' />
+                                  <span>Bracket {game.bracket}</span>
+                                  <span className='dashboard-recent-game-separator' aria-hidden='true' />
+                                  <span>{game.win_condition}</span>
+                                </p>
+                                <p className='dashboard-recent-game-seat-order'>
+                                  <span className='dashboard-recent-game-seat-label'>Seats</span>
+                                  <span>{formatSeatOrder(game)}</span>
+                                </p>
+                              </div>
                             </div>
-                            <p className='app-muted text-sm'>
-                              {winner ? `Winner: ${readSingleName(winner.player)}` : 'Winner not recorded'}
-                            </p>
+                            {winner ? (
+                              <p className='dashboard-winner-badge dashboard-winner-badge-compact'>
+                                Winner: {readSingleName(winner.player)}
+                              </p>
+                            ) : (
+                              <p className='app-muted text-sm'>Winner not recorded</p>
+                            )}
                           </div>
                         </button>
                       </li>

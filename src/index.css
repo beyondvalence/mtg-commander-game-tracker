@@ -56,7 +56,7 @@ body {
   }
 
   .wireframe-title {
-    @apply text-5xl font-black tracking-tight md:text-7xl;
+    @apply text-4xl font-black tracking-tight md:text-5xl;
   }
 
   .wireframe-copy {
@@ -65,6 +65,9 @@ body {
 
   .app-topbar {
     @apply flex items-center gap-3 rounded-[1.5rem] border px-4 py-2 md:px-5;
+    position: relative;
+    z-index: 40;
+    overflow: visible;
     background: linear-gradient(180deg, var(--app-shell), var(--app-panel-soft));
     border-color: var(--app-border);
     box-shadow: var(--app-shadow);
@@ -137,8 +140,26 @@ body {
     @apply flex h-full min-h-[9.25rem] flex-col justify-between;
   }
 
-  .dashboard-header-add-game {
-    @apply shrink-0 self-start px-5 py-3;
+  .dashboard-link-card {
+    min-height: 7.75rem;
+  }
+
+  .dashboard-winner-badge {
+    @apply rounded-full border px-4 py-2 text-sm font-semibold;
+    border-color: #047857;
+    background: color-mix(in srgb, #10b981 8%, transparent);
+    color: #047857;
+    box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.08);
+  }
+
+  html[data-theme='dark'] .dashboard-winner-badge {
+    border-color: rgba(110, 231, 183, 0.4);
+    background: rgba(16, 185, 129, 0.16);
+    color: #a7f3d0;
+  }
+
+  .dashboard-winner-badge-compact {
+    @apply px-3 py-1.5;
   }
 
   .dashboard-add-game-card {
@@ -168,12 +189,16 @@ body {
       0 24px 54px rgba(0, 0, 0, 0.32);
   }
 
+  .dashboard-grid-add-game {
+    @apply items-center text-left;
+  }
+
   .dashboard-add-game-row {
-    @apply flex items-center gap-4;
+    @apply flex items-center gap-3;
   }
 
   .dashboard-add-game-plus {
-    @apply flex h-10 w-10 items-center justify-center rounded-2xl text-3xl font-semibold;
+    @apply flex h-9 w-9 items-center justify-center rounded-2xl text-2xl font-semibold;
     background: rgba(134, 239, 172, 0.12);
     border: 1px solid rgba(134, 239, 172, 0.28);
     color: #9bfda7;
@@ -182,7 +207,7 @@ body {
 
   .dashboard-add-game-label {
     font-family: "Space Grotesk", "Inter", "Segoe UI", sans-serif;
-    font-size: 1.2rem;
+    font-size: 1.05rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -299,6 +324,40 @@ body {
   .game-notes-label {
     @apply text-sm font-semibold uppercase tracking-[0.18em];
     color: var(--app-muted);
+  }
+
+  .game-notes-toggle {
+    @apply flex w-full items-center justify-between gap-3 rounded-lg text-left transition;
+    color: inherit;
+  }
+
+  .game-notes-toggle:hover .game-notes-label {
+    color: var(--app-text);
+  }
+
+  .game-notes-toggle:focus-visible {
+    outline: none;
+  }
+
+  .game-notes-toggle:focus-visible .game-notes-caret {
+    border-color: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+  }
+
+  .game-notes-caret {
+    @apply flex h-8 w-8 items-center justify-center rounded-full border transition;
+    background: var(--app-panel);
+    border-color: var(--app-border);
+    color: var(--app-muted);
+  }
+
+  .game-notes-caret.is-open {
+    transform: rotate(180deg);
+    color: var(--app-text);
+  }
+
+  .game-notes-content {
+    @apply flex flex-col gap-2;
   }
 
   .game-notes-input {
@@ -502,6 +561,37 @@ body {
     box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
   }
 
+  .dashboard-recent-game-details {
+    @apply mt-1 flex flex-col gap-1;
+  }
+
+  .dashboard-recent-game-meta {
+    @apply app-muted flex flex-wrap items-center gap-2 text-sm;
+  }
+
+  .dashboard-recent-game-dash {
+    color: color-mix(in srgb, var(--app-muted) 82%, transparent);
+  }
+
+  .dashboard-recent-game-separator {
+    width: 0.35rem;
+    height: 0.35rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--app-muted) 72%, transparent);
+  }
+
+  .dashboard-recent-game-seat-order {
+    @apply flex flex-wrap items-center gap-2 text-sm;
+    color: var(--app-text);
+  }
+
+  .dashboard-recent-game-seat-label {
+    @apply rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-[0.2em];
+    background: color-mix(in srgb, var(--app-panel) 88%, transparent);
+    border-color: var(--app-border);
+    color: var(--app-muted);
+  }
+
   .history-game-selected {
     border-color: #22c55e;
     box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.18), var(--app-shadow);
@@ -513,6 +603,15 @@ body {
 
   .history-commander-pair.has-secondary {
     @apply gap-2;
+  }
+
+  .history-commander-names {
+    @apply min-w-0 space-y-1;
+  }
+
+  .history-commander-name-spacer {
+    @apply text-sm leading-normal;
+    visibility: hidden;
   }
 
   .history-commander-frame {

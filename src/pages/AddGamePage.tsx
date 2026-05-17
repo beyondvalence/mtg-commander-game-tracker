@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { CommanderAutocomplete } from '../components/CommanderAutocomplete';
-import { fetchAddGamePlayerSuggestions, fetchWinConditionSuggestions, type AddGamePlayerSuggestion } from '../lib/gameRecords';
+import { fetchAddGamePlayerSuggestions, fetchWinConditionSuggestions, setGameWinner, type AddGamePlayerSuggestion } from '../lib/gameRecords';
 import { getScryfallSearchUrl } from '../lib/scryfall';
 import { supabase } from '../lib/supabase';
 import type { CommanderCard } from '../types/app';
@@ -100,7 +100,7 @@ function isMissingBracketColumnError(error: unknown) {
 }
 
 function normalizePlayerName(value: string) {
-  return value.trim().toLowerCase();
+  return value.trim();
 }
 
 export default function AddGamePage() {
@@ -120,6 +120,7 @@ export default function AddGamePage() {
   const [playerSuggestions, setPlayerSuggestions] = useState<AddGamePlayerSuggestion[]>([]);
   const [winConditionSuggestions, setWinConditionSuggestions] = useState<string[]>([]);
   const [visibleCommanderCardBySeat, setVisibleCommanderCardBySeat] = useState<Record<number, number>>({});
+  const [isGameNotesOpen, setIsGameNotesOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const playersCount = parseInt(watch('playersCount') || '4', 10);
@@ -388,9 +389,9 @@ export default function AddGamePage() {
 
       const insertedParticipants: Array<{
         id: string;
-        player_id: string;
-        is_winner: boolean;
+        turn_order_position: number;
       }> = [];
+      const winnerSeat = participantRows.find((participant) => participant.isWinner)?.seat ?? null;
 
       for (const participantRow of participantRows) {
         const { data: insertedParticipant, error: participantError } = await supabase
@@ -401,9 +402,10 @@ export default function AddGamePage() {
             primary_commander_id: participantRow.primaryCommanderId,
             secondary_commander_id: participantRow.secondaryCommanderId,
             turn_order_position: participantRow.seat,
-            is_winner: participantRow.isWinner,
+            // The canonical winner assignment happens through set_game_winner after all seats exist.
+            is_winner: false,
           })
-          .select('id, player_id, is_winner')
+          .select('id, turn_order_position')
           .single();
 
         if (participantError) throw participantError;
@@ -411,18 +413,10 @@ export default function AddGamePage() {
         insertedParticipants.push(insertedParticipant);
       }
 
-      const winnerParticipant = insertedParticipants.find((participant) => participant.is_winner) ?? null;
-      if (winnerParticipant) {
-        const { error: updateGameError } = await supabase
-          .from('games')
-          .update({
-            winner_player_id: winnerParticipant.player_id,
-            winner_participant_id: winnerParticipant.id,
-          })
-          .eq('id', gameData.id);
-
-        if (updateGameError) throw updateGameError;
-      }
+      const winnerParticipant = winnerSeat
+        ? insertedParticipants.find((participant) => participant.turn_order_position === winnerSeat) ?? null
+        : null;
+      await setGameWinner(gameData.id, winnerParticipant?.id ?? null);
 
       navigate('/history');
     } catch (err) {
@@ -437,7 +431,7 @@ export default function AddGamePage() {
       <form className='mx-auto flex w-full max-w-6xl flex-col gap-4' onSubmit={handleSubmit(handleSaveGame)}>
         <div className='flex flex-wrap items-start justify-between gap-3'>
           <div className='text-left'>
-            <h1 className='wireframe-title text-4xl md:text-6xl'>Add Game</h1>
+            <h1 className='wireframe-title'>Add Game</h1>
           </div>
 
           <button
@@ -504,16 +498,34 @@ export default function AddGamePage() {
             />
           )}
 
-          <label className='game-notes-panel sm:col-span-2 lg:col-span-4'>
-            <span className='game-notes-label'>Game Notes</span>
-            <textarea
-              maxLength={GAME_NOTES_MAX_LENGTH}
-              className='app-input game-notes-input game-notes-textarea text-base md:text-lg'
-              placeholder='Add any table notes, memorable plays, or context for this game'
-              {...register('gameNotes')}
-            />
-            <p className='game-notes-count'>{gameNotes.length}/{GAME_NOTES_MAX_LENGTH}</p>
-          </label>
+          <div className='game-notes-panel sm:col-span-2 lg:col-span-4'>
+            <button
+              type='button'
+              className='game-notes-toggle'
+              aria-expanded={isGameNotesOpen}
+              aria-controls='add-game-notes-panel'
+              onClick={() => setIsGameNotesOpen((open) => !open)}
+            >
+              <span className='game-notes-label'>Game Notes</span>
+              <span className={`game-notes-caret ${isGameNotesOpen ? 'is-open' : ''}`} aria-hidden='true'>
+                <svg viewBox='0 0 20 20' className='h-4 w-4' fill='none' stroke='currentColor' strokeWidth='1.9'>
+                  <path d='m6 8 4 4 4-4' strokeLinecap='round' strokeLinejoin='round' />
+                </svg>
+              </span>
+            </button>
+
+            {isGameNotesOpen && (
+              <div id='add-game-notes-panel' className='game-notes-content'>
+                <textarea
+                  maxLength={GAME_NOTES_MAX_LENGTH}
+                  className='app-input game-notes-input game-notes-textarea text-base md:text-lg'
+                  placeholder='Add any table notes, memorable plays, or context for this game'
+                  {...register('gameNotes')}
+                />
+                <p className='game-notes-count'>{gameNotes.length}/{GAME_NOTES_MAX_LENGTH}</p>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className='w-full space-y-3 text-left'>

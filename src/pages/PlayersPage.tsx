@@ -21,7 +21,7 @@ export default function PlayersPage() {
   const [searchValue, setSearchValue] = useState(searchParams.get('player') ?? '');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const deferredSearchValue = useDeferredValue(searchValue.trim().toLowerCase());
+  const deferredSearchValue = useDeferredValue(searchValue.trim());
 
   useEffect(() => {
     setSearchValue(searchParams.get('player') ?? '');
@@ -82,8 +82,8 @@ export default function PlayersPage() {
 
   const filteredPlayers = deferredSearchValue
     ? players.filter((player) => {
-        const commanderNames = player.commanders.map((commander) => commander.name.toLowerCase()).join(' ');
-        return player.name.toLowerCase().includes(deferredSearchValue) || commanderNames.includes(deferredSearchValue);
+        const commanderNames = player.commanders.map((commander) => commander.name).join(' ');
+        return player.name.includes(deferredSearchValue) || commanderNames.includes(deferredSearchValue);
       })
     : players;
 

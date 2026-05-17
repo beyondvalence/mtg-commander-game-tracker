@@ -1,16 +1,21 @@
 ## Session Memory
 
 - The app shell now uses a compact branded top navigation bar with a `PodTracker` logo, a highlighted `Add Game` nav action, and a theme button on the right.
-- Dashboard has been refocused into `Pod Highlights` with clickable stat cards, a deep-linked latest-game tile, clickable recent-game rows, and a header-level `Add Game` action.
+- Dashboard has been refocused into `Pod Highlights` with compact clickable stat cards, a grid-based `Add Game` tile in the top row, and clickable recent-game rows.
+- Dashboard recent-game rows now show game/date/bracket/win-condition on one line, seats in turn order on a second line, and winner status as a styled badge.
 - Add Game now uses a single top control row for bracket, date, seats, and finished state.
 - Add Game seat cards now emphasize commander art with a centered single-card stage and arrow-based horizontal switching when two commander cards are present.
-- Add Game and History now share a labeled `Game Notes` panel style, plus a 500-character limit and live character count for editable notes.
+- Add Game notes are now hidden by default behind a caret toggle, and Add Game and History still share the labeled `Game Notes` panel style, 500-character limit, and live character count for editable notes.
+- Add Game winner assignment now creates all participant rows first and then calls the shared `set_game_winner` RPC, so app writes match the database’s canonical winner path.
 - Game History now supports one edit flow per game for bracket, win condition, notes, and winner updates.
-- History tile headers were tightened so metadata sits inline, winner status sits top-right, and edit/save actions stack on the right.
+- History tile headers now split `Game #` onto its own row with metadata beneath it, while winner status stays top-right and edit/save actions remain stacked on the right.
 - History winner selection remains inside each seat card during edit mode.
-- Game History filters now cover player, bracket, and win condition, all backed by URL params.
+- History commander art alignment is now normalized within each game card by reserving a blank commander-name line for single-commander seats whenever any player in that pod has two commanders.
+- Game History filters now cover player, bracket, and win condition, all backed by URL params, and player-name matching is case-sensitive.
 - History player names now link into Players with a prefilled player filter, and Players reads that `player` param into its own search bar.
-- Players now includes expanded summary cards, a clearer filter bar with inline reset, player-to-history navigation, and clickable commander chips/art.
+- Players now includes expanded summary cards, a clearer filter bar with inline reset, player-to-history navigation, clickable commander chips/art, and case-sensitive player/commander search.
+- Shared page titles have been reduced in size for a more compact page header treatment.
 - Schema/code validation confirmed that shared game fields stay aligned across pages, including `games.notes`, `games.bracket`, `games.win_condition`, and winner linkage fields.
 - The live Supabase `set_game_winner` function was previously fixed so it clears the old winner before assigning a new one, avoiding the unique partial-index violation on `game_participants.is_winner`.
+- The live Supabase database now also enforces winner-field consistency when no winner is set and auto-syncs `games.number_of_players` from actual `game_participants` rows; validation queries confirmed zero winner mismatches and zero player-count mismatches.
 - Current validation baseline: `npm run build` passes.

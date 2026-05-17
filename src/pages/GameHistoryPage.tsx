@@ -201,7 +201,7 @@ export default function GameHistoryPage() {
 
   const filteredGames = games.filter((game) => {
     const matchesPlayer = !playerFilter.trim()
-      || game.game_participants.some((participant) => readSingleName(participant.player).toLowerCase().includes(playerFilter.trim().toLowerCase()));
+      || game.game_participants.some((participant) => readSingleName(participant.player).includes(playerFilter.trim()));
     const matchesBracket = !bracketFilter || String(game.bracket) === bracketFilter;
     const matchesWinCondition = !winConditionFilter || game.win_condition === winConditionFilter;
 
@@ -305,10 +305,16 @@ export default function GameHistoryPage() {
               id={`history-game-${game.id}`}
               className={`app-card text-left ${selectedGameId === game.id ? 'history-game-selected' : ''}`}
             >
+              {(() => {
+                const hasAnySecondaryCommander = game.game_participants.some((participant) => Boolean(readSingleCommander(participant.secondary_commander)));
+
+                return (
+                  <>
               <div className='flex flex-wrap items-start justify-between gap-3 border-b pb-3 md:flex-nowrap' style={{ borderColor: 'var(--app-panel-strong)' }}>
                 <div className='min-w-0 flex-1 space-y-3'>
+                  <p className='app-muted text-base font-semibold uppercase tracking-[0.18em] md:text-lg'>Game #{game.gameNumber}</p>
+
                   <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
-                    <p className='app-muted text-base font-semibold uppercase tracking-[0.18em] md:text-lg'>Game #{game.gameNumber}</p>
                     <p className='app-muted text-base md:text-lg'>{formatPlayedAt(game.played_at)}</p>
                     <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
                     <p className='app-muted text-base md:text-lg'>{game.number_of_players} players</p>
@@ -443,7 +449,7 @@ export default function GameHistoryPage() {
                           ) : null}
                         </div>
 
-                        <div className='space-y-1 min-w-0'>
+                        <div className='history-commander-names min-w-0'>
                           <p className='app-muted text-sm'>
                             <a href={getScryfallSearchUrl(readSingleName(participant.primary_commander))} target='_blank' rel='noreferrer' className='underline underline-offset-2'>
                               {readSingleName(participant.primary_commander)}
@@ -452,8 +458,13 @@ export default function GameHistoryPage() {
                           {secondaryCommander && (
                             <p className='app-muted text-sm'>
                               <a href={getScryfallSearchUrl(secondaryCommander.name)} target='_blank' rel='noreferrer' className='underline underline-offset-2'>
-                                {secondaryCommander.name}
-                              </a>
+                              {secondaryCommander.name}
+                            </a>
+                          </p>
+                          )}
+                          {!secondaryCommander && hasAnySecondaryCommander && (
+                            <p className='history-commander-name-spacer' aria-hidden='true'>
+                              &nbsp;
                             </p>
                           )}
                         </div>
@@ -495,7 +506,9 @@ export default function GameHistoryPage() {
                     );
                   })}
               </ul>
-
+                  </>
+                );
+              })()}
             </article>
           ))}
         </div>

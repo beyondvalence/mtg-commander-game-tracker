@@ -5,40 +5,46 @@
 - The app is a no-login MTG Commander tracker backed directly by a live Supabase project.
 - Navigation now uses a compact horizontal top bar with a branded `PodTracker` logo, a highlighted `Add Game` nav action, and a theme button on the right.
 - The main active pages are Dashboard, Add Game, Game History, and Players.
-- Dashboard now surfaces compact live stat cards, a deep-linked latest-game card, clickable recent-game rows, and a header-level `Add Game` action.
-- Add Game supports optional unfinished games, reusable win-condition suggestions, player-name autocomplete, player-specific commander suggestions, partner/background-style secondary commanders, centered commander art, and one-at-a-time partner/background carousel controls.
-- Game History supports inline game editing for bracket, win condition, notes, and winner selection, with winner changes applied through the shared `set_game_winner` database function.
-- Players renders live player tiles plus summary stat cards derived from saved history, along with URL-backed filtering.
+- Dashboard now surfaces compact live stat cards, a top-row `Add Game` tile, and clickable recent-game rows with compact metadata, seat-order summaries, and winner badges.
+- Add Game supports optional unfinished games, reusable win-condition suggestions, case-sensitive player-name autocomplete matching, player-specific commander suggestions, partner/background-style secondary commanders, centered commander art, one-at-a-time partner/background carousel controls, and a collapsed-by-default notes section behind a caret toggle.
+- Game History supports inline game editing for bracket, win condition, notes, and winner selection, with winner changes applied through the shared `set_game_winner` database function, plus seat-card art alignment that stays visually consistent when some players have two commanders and case-sensitive player filtering.
+- Players renders live player tiles plus summary stat cards derived from saved history, along with URL-backed, case-sensitive filtering.
 
 ## Recent Work
 
 - Reworked the app shell from a left sidebar to a top navigation bar, added a branded `PodTracker` mark, and removed the standalone Commanders page from active navigation.
-- Refined the Dashboard into `Pod Highlights`, added compact metric cards, moved the `Add Game` action into the header area, and made the latest and recent game entries deep-link into History.
+- Refined the Dashboard into `Pod Highlights`, added compact metric cards, moved `Add Game` into the top tile row, removed the latest-game tile, and made recent game entries deep-link into History.
+- Tightened the Dashboard top row and page title sizing for a more compact first-screen layout.
+- Expanded Dashboard recent-game rows to show bracket and seat-order player summaries, then compressed them into a two-line layout with a styled winner badge.
 - Turned Dashboard metric cards into full-tile links for History and Players navigation.
 - Renamed and tightened Add Game page copy and controls, consolidating the top filters into one row for bracket, date, seats, and finished state.
 - Made Add Game support unfinished games by hiding winner and win-condition requirements until `Finished game` is enabled.
 - Reworked Add Game seat-card layouts to emphasize larger commander art, with arrow-based horizontal cycling for two-card commander setups.
-- Added a labeled `Game Notes` panel with a 500-character limit, live character count, and shared styling between Add Game and History.
+- Added a labeled `Game Notes` panel with a 500-character limit, live character count, and shared styling between Add Game and History, then made Add Game notes collapsed by default with a caret toggle.
+- Updated Add Game save flow so winner assignment happens through the shared `set_game_winner` RPC after all participant rows are created.
 - Expanded Game History editing so one `Edit game` flow now updates bracket, win condition, notes, and winner state together.
-- Reworked History tile headers so game metadata, inline edit controls, winner state, and edit/save actions are more compact and visually grouped.
+- Reworked History tile headers so `Game #` sits on its own line, metadata and inline edit controls sit beneath it, and winner state and edit/save actions remain compact on the right.
 - Replaced the History winner dropdown interaction with per-seat winner buttons inside each seat card while editing.
+- Added per-game spacing normalization in History so commander art stays aligned across seat cards even when only some players have secondary commanders.
 - Added bracket and win-condition filters to Game History alongside the player filter, all backed by URL params.
+- Made Add Game suggestion matching, History player filtering, and Players search case-sensitive so app behavior matches case-sensitive participant naming.
 - Added navigation from History player names into Players and from Players back into History using pre-filled URL filters.
 - Expanded Players summary cards to include most-played player, highest win-rate player, most-played commander, and highest commander win rate, plus a clearer filter bar with inline reset.
 - Fixed the live `set_game_winner` SQL function so winner changes safely clear the old winner before assigning the new one, avoiding the unique partial-index violation on `game_participants.is_winner`.
+- Applied a live Supabase consistency patch that tightens winner-field enforcement, syncs `games.number_of_players` from `game_participants`, and backfills any existing winner/count drift.
 
 ## Key Files
 
 - `src/pages/AddGamePage.tsx`
-  Add Game form state, finished-game toggle behavior, player suggestions, commander selection, seat-card art carousel behavior, notes capture, and save flow.
+  Add Game form state, finished-game toggle behavior, case-sensitive player suggestions, commander selection, seat-card art carousel behavior, collapsible notes capture, and save flow.
 - `src/pages/GameHistoryPage.tsx`
-  Filtered history list, inline edit mode for bracket/win condition/notes, seat-card winner selection, player-to-Players navigation, and Scryfall links.
+  Filtered history list, inline edit mode for bracket/win condition/notes, split game-card headers, case-sensitive player filtering, seat-card winner selection, art alignment spacing, player-to-Players navigation, and Scryfall links.
 - `src/pages/PlayersPage.tsx`
-  Player summary cards, URL-backed player filtering, player-to-history navigation, and commander-link rendering.
+  Player summary cards, URL-backed case-sensitive player/commander filtering, player-to-history navigation, and commander-link rendering.
 - `src/lib/gameRecords.ts`
   Shared reads for dashboard/history/player summaries plus the `setGameWinner` RPC wrapper.
 - `src/pages/DashboardPage.tsx`
-  Compact home-page stat cards, latest/recent game deep links, and top-level `Add Game` action placement.
+  Compact home-page stat cards, top-row `Add Game` tile, and recent-game summaries with seat-order and winner context.
 - `src/lib/scryfall.ts`
   Commander search helpers and the shared Scryfall URL builder.
 - `src/components/Layout.tsx`
@@ -46,7 +52,9 @@
 - `src/index.css`
   App-wide layout plus the shared visual language for Dashboard, Add Game, History, Players, commander art stages, and notes panels.
 - `schema.sql`
-  Current schema plus the corrected `set_game_winner` function and winner consistency triggers.
+  Current schema plus the corrected `set_game_winner` function, stricter winner consistency enforcement, and participant-count sync triggers.
+- `supabase/review_consistency_patch.sql`
+  Applied live-database patch for winner consistency enforcement, `number_of_players` sync, and one-time backfill of existing inconsistencies.
 
 ## Validation Status
 
@@ -73,11 +81,16 @@
   - `games.winner_player_id`
   - `game_participants.is_winner`
 - The live `set_game_winner` function was patched during this session and revalidated successfully after the fix.
+- Live Supabase validation after the consistency patch confirmed:
+  - the trigger `trg_sync_game_participant_count` exists
+  - winner inconsistency count is `0`
+  - player-count inconsistency count is `0`
 
 ## Known Caveats
 
 - The app still uses broad public Supabase access with permissive RLS for this no-login setup.
 - Game creation still happens as multiple client-side writes rather than a single transactional RPC.
+- Player identity is still case-sensitive at the database level by design, so differently cased names remain distinct players.
 - Players summary cards currently derive their metrics client-side from full history reads, which will eventually become a scaling bottleneck.
 - History and Players filters are URL-backed client filters rather than server-side filtered queries.
 - The repo still contains `src/pages/CommandersPage.tsx`, but the route now redirects to home and the page is no longer exposed in navigation.
@@ -86,6 +99,9 @@
 
 - Convert Add Game creation into a single transactional database function or RPC.
 - Add a game-service field or selector for `paper`, `Convoke`, or `Spelltable`.
+- Add a turn-length field.
+- Add a first-kill field or selector.
+- Add a died-alone selector.
 - Consider pushing player and commander summary aggregation into SQL for better performance at larger data volumes.
 
 ## Ignored Local Files

@@ -136,7 +136,21 @@ begin
   from public.games g
   where g.id = v_game_id;
 
+  select count(*)
+    into v_marked_winner_count
+  from public.game_participants gp
+  where gp.game_id = v_game_id
+    and gp.is_winner = true;
+
   if v_winner_participant_id is null then
+    if v_marked_winner_count <> 0 then
+      raise exception 'game % cannot have any game_participants.is_winner = true rows when winner_participant_id is null', v_game_id;
+    end if;
+
+    if v_winner_player_id is not null then
+      raise exception 'game % cannot have winner_player_id when winner_participant_id is null', v_game_id;
+    end if;
+
     return null;
   end if;
 
@@ -148,12 +162,6 @@ begin
   ) then
     raise exception 'winner_participant_id % must belong to game %', v_winner_participant_id, v_game_id;
   end if;
-
-  select count(*)
-    into v_marked_winner_count
-  from public.game_participants gp
-  where gp.game_id = v_game_id
-    and gp.is_winner = true;
 
   if v_marked_winner_count <> 1 then
     raise exception 'game % must have exactly one game_participants.is_winner = true row', v_game_id;
@@ -182,6 +190,33 @@ begin
 end;
 $$ language plpgsql;
 
+create or replace function public.sync_game_participant_count()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'UPDATE' and old.game_id is distinct from new.game_id then
+    update public.games
+    set number_of_players = (
+      select count(*)::integer
+      from public.game_participants gp
+      where gp.game_id = old.game_id
+    )
+    where id = old.game_id;
+  end if;
+
+  update public.games
+  set number_of_players = (
+    select count(*)::integer
+    from public.game_participants gp
+    where gp.game_id = case when tg_op = 'DELETE' then old.game_id else new.game_id end
+  )
+  where id = case when tg_op = 'DELETE' then old.game_id else new.game_id end;
+
+  return null;
+end;
+$$;
+
 drop trigger if exists trg_enforce_game_winner_consistency_from_games on public.games;
 create constraint trigger trg_enforce_game_winner_consistency_from_games
 after insert or update of winner_participant_id, winner_player_id on public.games
@@ -193,6 +228,11 @@ create constraint trigger trg_enforce_game_winner_consistency_from_participants
 after insert or update of is_winner, game_id, player_id or delete on public.game_participants
 deferrable initially deferred
 for each row execute function public.enforce_game_winner_consistency();
+
+drop trigger if exists trg_sync_game_participant_count on public.game_participants;
+create trigger trg_sync_game_participant_count
+after insert or update of game_id or delete on public.game_participants
+for each row execute function public.sync_game_participant_count();
 
 create or replace function public.set_game_winner(
   p_game_id uuid,

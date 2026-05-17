@@ -60,7 +60,6 @@ for each row execute function public.set_updated_at();
 -- Games
 create table if not exists public.games (
   id uuid primary key default gen_random_uuid(),
-  title text,
   played_at date not null default current_date,
   duration_minutes integer check (duration_minutes is null or duration_minutes > 0),
   number_of_players integer not null default 4 check (number_of_players >= 2),
@@ -74,7 +73,6 @@ create table if not exists public.games (
 );
 
 alter table public.games drop column if exists user_id cascade;
-alter table public.games add column if not exists title text;
 alter table public.games add column if not exists bracket integer not null default 3;
 alter table public.games drop constraint if exists games_bracket_check;
 alter table public.games add constraint games_bracket_check check (bracket >= 1 and bracket <= 5);

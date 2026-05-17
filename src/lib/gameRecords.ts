@@ -12,7 +12,6 @@ export type HistoryGameParticipant = {
 
 export type HistoryGame = {
   id: string;
-  title: string | null;
   played_at: string;
   created_at: string;
   number_of_players: number;
@@ -125,7 +124,6 @@ function toNumberedGames(games: HistoryGame[]) {
 export async function fetchNumberedGames() {
   const query = `
       id,
-      title,
       played_at,
       created_at,
       number_of_players,
@@ -163,7 +161,6 @@ export async function fetchNumberedGames() {
         .from('games')
         .select(`
           id,
-          title,
           played_at,
           created_at,
           number_of_players,
@@ -186,9 +183,9 @@ export async function fetchNumberedGames() {
               image_url
             )
           )
-        `)
-        .order('played_at', { ascending: false })
-        .order('created_at', { ascending: false });
+    `)
+    .order('played_at', { ascending: false })
+    .order('created_at', { ascending: false });
 
       if (fallbackResult.error) {
         throw fallbackResult.error;
@@ -209,18 +206,24 @@ export async function fetchNumberedGames() {
 }
 
 export async function fetchDashboardSnapshot() {
-  const [gamesResult, commandersResult] = await Promise.all([
+  const [gamesResult, commandersResult, playersResult] = await Promise.all([
     fetchNumberedGames(),
     supabase.from('commanders').select('*', { count: 'exact', head: true }),
+    supabase.from('players').select('*', { count: 'exact', head: true }),
   ]);
 
   if (commandersResult.error) {
     throw commandersResult.error;
   }
 
+  if (playersResult.error) {
+    throw playersResult.error;
+  }
+
   return {
     totalGames: gamesResult.length,
     totalCommanders: commandersResult.count ?? 0,
+    totalPlayers: playersResult.count ?? 0,
     latestGame: gamesResult[0] ?? null,
     recentGames: gamesResult.slice(0, 3),
   };

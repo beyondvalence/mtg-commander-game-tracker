@@ -21,6 +21,7 @@ type AddGameFormValues = {
 const DEFAULT_WIN_CONDITIONS = ['Combat', 'Combo', 'Commander Damage', 'Other'] as const;
 const CUSTOM_WIN_CONDITION_VALUE = '__custom__';
 const UNFINISHED_GAME_WIN_CONDITION = 'Unfinished';
+const GAME_NOTES_MAX_LENGTH = 500;
 
 function createParticipantSeat(seat: number): ParticipantInput {
   return {
@@ -118,12 +119,14 @@ export default function AddGamePage() {
   const [participants, setParticipants] = useState<ParticipantInput[]>(() => Array.from({ length: 4 }, (_, index) => createParticipantSeat(index + 1)));
   const [playerSuggestions, setPlayerSuggestions] = useState<AddGamePlayerSuggestion[]>([]);
   const [winConditionSuggestions, setWinConditionSuggestions] = useState<string[]>([]);
+  const [visibleCommanderCardBySeat, setVisibleCommanderCardBySeat] = useState<Record<number, number>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const playersCount = parseInt(watch('playersCount') || '4', 10);
   const finishedGame = watch('finishedGame');
   const winCondition = watch('winCondition');
   const customWinCondition = watch('customWinCondition');
+  const gameNotes = watch('gameNotes') ?? '';
   const isAddingCustomWinCondition = finishedGame && winCondition === CUSTOM_WIN_CONDITION_VALUE;
 
   useEffect(() => {
@@ -251,6 +254,13 @@ export default function AddGamePage() {
         isWinner: participant.seat === seat ? !participant.isWinner : false,
       })),
     );
+  };
+
+  const handleVisibleCommanderCardChange = (seat: number, nextIndex: number) => {
+    setVisibleCommanderCardBySeat((current) => ({
+      ...current,
+      [seat]: nextIndex,
+    }));
   };
 
   const handleSaveGame = async (formData: AddGameFormValues) => {
@@ -426,41 +436,32 @@ export default function AddGamePage() {
     <section className='wireframe-shell px-5 py-6 md:px-8 md:py-7'>
       <form className='mx-auto flex w-full max-w-6xl flex-col gap-4' onSubmit={handleSubmit(handleSaveGame)}>
         <div className='flex flex-wrap items-start justify-between gap-3'>
-          <div className='space-y-2 text-left'>
+          <div className='text-left'>
             <h1 className='wireframe-title text-4xl md:text-6xl'>Add Game</h1>
-            <p className='app-muted text-sm md:text-base'>Log the pod details up top, then fill in each active seat below.</p>
           </div>
 
           <button
             type='submit'
             disabled={isLoading || hasIncompleteSeat}
-            className='rounded-full border px-6 py-2.5 text-lg font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 md:px-8 md:text-xl'
-            style={{ background: '#18181b', borderColor: 'var(--app-border)' }}
+            className='dashboard-add-game-card dashboard-save-button disabled:cursor-not-allowed disabled:opacity-50'
           >
             {isLoading ? 'Saving...' : 'Save Game'}
           </button>
         </div>
 
-        <div className='grid w-full gap-3 text-left sm:grid-cols-2'>
-          <div className='grid gap-3 sm:col-span-2 sm:grid-cols-2'>
-            <select className='app-input h-14 text-base md:text-lg' {...register('bracket', { required: true })}>
-              <option value='1'>Bracket 1</option>
-              <option value='2'>Bracket 2</option>
-              <option value='3'>Bracket 3</option>
-              <option value='4'>Bracket 4</option>
-              <option value='5'>Bracket 5</option>
-            </select>
-
-            <label className='flex h-14 items-center gap-3 rounded-xl border px-3 py-2.5' style={{ background: 'var(--app-panel-soft)', borderColor: 'var(--app-border)' }}>
-              <input type='checkbox' className='h-5 w-5' {...register('finishedGame')} />
-              <span className='min-w-0 flex-1 text-sm font-semibold app-muted md:text-base'>Finished game</span>
-            </label>
-          </div>
+        <div className='grid w-full gap-3 text-left sm:grid-cols-2 lg:grid-cols-4'>
+          <select className='app-input h-14 text-base md:text-lg' {...register('bracket', { required: true })}>
+            <option value='1'>Bracket 1</option>
+            <option value='2'>Bracket 2</option>
+            <option value='3'>Bracket 3</option>
+            <option value='4'>Bracket 4</option>
+            <option value='5'>Bracket 5</option>
+          </select>
 
           <input type='date' className='app-input h-14 text-base md:text-lg' {...register('playedAt', { required: true })} />
 
           <label className='flex h-14 items-center gap-3 rounded-xl border px-3 py-2.5' style={{ background: 'var(--app-panel-soft)', borderColor: 'var(--app-border)' }}>
-            <span className='min-w-0 flex-1 text-sm font-semibold app-muted md:text-base'>Number of Seats</span>
+            <span className='min-w-0 flex-1 text-sm font-semibold app-muted md:text-base'>Seats</span>
             <select className='app-input flex-1 !p-2.5 text-base md:text-lg' {...register('playersCount', { required: true })}>
               <option value='2'>2</option>
               <option value='3'>3</option>
@@ -468,9 +469,14 @@ export default function AddGamePage() {
             </select>
           </label>
 
+          <label className='flex h-14 items-center gap-3 rounded-xl border px-3 py-2.5' style={{ background: 'var(--app-panel-soft)', borderColor: 'var(--app-border)' }}>
+            <input type='checkbox' className='h-5 w-5' {...register('finishedGame')} />
+            <span className='min-w-0 flex-1 text-sm font-semibold app-muted md:text-base'>Finished game</span>
+          </label>
+
           {finishedGame && (
             <select
-              className='app-input h-14 text-base md:text-lg sm:col-span-2'
+              className='app-input h-14 text-base md:text-lg sm:col-span-2 lg:col-span-4'
               {...register('winCondition', {
                 onChange: (event) => {
                   if (event.target.value !== CUSTOM_WIN_CONDITION_VALUE) {
@@ -492,24 +498,28 @@ export default function AddGamePage() {
           {isAddingCustomWinCondition && (
             <input
               type='text'
-              className='app-input h-14 text-base md:text-lg sm:col-span-2'
+              className='app-input h-14 text-base md:text-lg sm:col-span-2 lg:col-span-4'
               placeholder='Enter a new win condition'
               {...register('customWinCondition', { required: isAddingCustomWinCondition })}
             />
           )}
 
-          <textarea
-            className='app-input min-h-[7rem] text-base md:text-lg sm:col-span-2'
-            placeholder='Game notes'
-            {...register('gameNotes')}
-          />
+          <label className='game-notes-panel sm:col-span-2 lg:col-span-4'>
+            <span className='game-notes-label'>Game Notes</span>
+            <textarea
+              maxLength={GAME_NOTES_MAX_LENGTH}
+              className='app-input game-notes-input game-notes-textarea text-base md:text-lg'
+              placeholder='Add any table notes, memorable plays, or context for this game'
+              {...register('gameNotes')}
+            />
+            <p className='game-notes-count'>{gameNotes.length}/{GAME_NOTES_MAX_LENGTH}</p>
+          </label>
         </div>
 
         <div className='w-full space-y-3 text-left'>
           <div className='flex flex-wrap items-end justify-between gap-3'>
             <div>
-              <h2 className='text-2xl font-semibold'>Player Grid</h2>
-              <p className='app-muted text-sm'>Fill out each seat directly here. With four players, the seats display in a 2x2 grid.</p>
+              <h2 className='text-2xl font-semibold'>Seats + Commanders</h2>
             </div>
             <p className='app-chip'>{playersCount} seats active</p>
           </div>
@@ -518,6 +528,23 @@ export default function AddGamePage() {
             {participants.map((participant) => {
               const matchingPlayer = findMatchingPlayerSuggestion(participant.playerName);
               const playerCommanderSuggestions = matchingPlayer?.commanders ?? [];
+              const commanderCards = [
+                participant.primary
+                  ? {
+                      name: participant.primary.name,
+                      imageUrl: participant.primary.imageUrl ?? null,
+                    }
+                  : null,
+                participant.secondary
+                  ? {
+                      name: participant.secondary.name,
+                      imageUrl: participant.secondary.imageUrl ?? null,
+                    }
+                  : null,
+              ].filter((card): card is { name: string; imageUrl: string | null } => Boolean(card));
+              const hasCommanderCarousel = commanderCards.length > 1;
+              const visibleCommanderIndex = Math.min(visibleCommanderCardBySeat[participant.seat] ?? 0, Math.max(commanderCards.length - 1, 0));
+              const visibleCommanderCard = commanderCards[visibleCommanderIndex] ?? null;
 
               return (
                 <div key={participant.seat} className='app-card flex h-full flex-col gap-3 p-3.5'>
@@ -619,10 +646,19 @@ export default function AddGamePage() {
                     </div>
 
                     <div className='commander-stage min-h-[16rem] md:min-h-[17rem]'>
-                      <div className={`commander-stage-stack${participant.secondary ? ' has-secondary' : ''}`}>
-                        <div className={`commander-stage-card primary${participant.primary?.imageUrl ? ' filled' : ''}`}>
-                          {participant.primary?.imageUrl ? (
-                            <a href={getScryfallSearchUrl(participant.primary.name)} target='_blank' rel='noreferrer' className='block h-full w-full'>
+                      <div className='commander-stage-stack'>
+                        <div className={`commander-stage-card${visibleCommanderCard?.imageUrl ? ' filled' : ''}`}>
+                          {visibleCommanderCard?.imageUrl ? (
+                            <a href={getScryfallSearchUrl(visibleCommanderCard.name)} target='_blank' rel='noreferrer' className='commander-stage-link'>
+                              <img
+                                src={visibleCommanderCard.imageUrl}
+                                alt={visibleCommanderCard.name}
+                                className='commander-stage-image'
+                                loading='lazy'
+                              />
+                            </a>
+                          ) : participant.primary?.imageUrl ? (
+                            <a href={getScryfallSearchUrl(participant.primary.name)} target='_blank' rel='noreferrer' className='commander-stage-link'>
                               <img
                                 src={participant.primary.imageUrl}
                                 alt={participant.primary.name}
@@ -631,24 +667,31 @@ export default function AddGamePage() {
                               />
                             </a>
                           ) : (
-                            <span>Commander art</span>
+                            <span>{participant.secondary ? 'Commander pair art' : 'Commander art'}</span>
                           )}
                         </div>
 
-                        {(getSecondaryMode(participant.primary) || participant.secondary) && (
-                          <div className={`commander-stage-card secondary${participant.secondary?.imageUrl ? ' filled' : ''}`}>
-                            {participant.secondary?.imageUrl ? (
-                              <a href={getScryfallSearchUrl(participant.secondary.name)} target='_blank' rel='noreferrer' className='block h-full w-full'>
-                                <img
-                                  src={participant.secondary.imageUrl}
-                                  alt={participant.secondary.name}
-                                  className='commander-stage-image'
-                                  loading='lazy'
-                                />
-                              </a>
-                            ) : (
-                              <span>Second card</span>
-                            )}
+                        {hasCommanderCarousel && (
+                          <div className='commander-stage-controls'>
+                            <button
+                              type='button'
+                              className='commander-stage-arrow'
+                              onClick={() => handleVisibleCommanderCardChange(participant.seat, visibleCommanderIndex === 0 ? commanderCards.length - 1 : visibleCommanderIndex - 1)}
+                              aria-label='Show previous commander card'
+                            >
+                              ←
+                            </button>
+                            <p className='commander-stage-indicator'>
+                              {visibleCommanderIndex + 1} / {commanderCards.length}
+                            </p>
+                            <button
+                              type='button'
+                              className='commander-stage-arrow'
+                              onClick={() => handleVisibleCommanderCardChange(participant.seat, visibleCommanderIndex === commanderCards.length - 1 ? 0 : visibleCommanderIndex + 1)}
+                              aria-label='Show next commander card'
+                            >
+                              →
+                            </button>
                           </div>
                         )}
                       </div>

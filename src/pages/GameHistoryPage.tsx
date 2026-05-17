@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { getScryfallSearchUrl } from '../lib/scryfall';
 import { supabase } from '../lib/supabase';
 import { fetchNumberedGames, fetchWinConditionSuggestions, readSingleCommander, readSingleName, setGameWinner, type NumberedHistoryGame } from '../lib/gameRecords';
 
 const DEFAULT_WIN_CONDITIONS = ['Combat', 'Combo', 'Commander Damage', 'Other'] as const;
+const GAME_NOTES_MAX_LENGTH = 500;
 
 function formatPlayedAt(value: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -14,12 +15,16 @@ function formatPlayedAt(value: string) {
 
 export default function GameHistoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const selectedGameId = searchParams.get('game') ?? '';
   const [games, setGames] = useState<NumberedHistoryGame[]>([]);
-  const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
+  const [bracketDrafts, setBracketDrafts] = useState<Record<string, string>>({});
   const [winConditionDrafts, setWinConditionDrafts] = useState<Record<string, string>>({});
+  const [notesDrafts, setNotesDrafts] = useState<Record<string, string>>({});
   const [winnerDrafts, setWinnerDrafts] = useState<Record<string, string>>({});
   const [winConditionOptions, setWinConditionOptions] = useState<string[]>([]);
   const [playerFilter, setPlayerFilter] = useState(searchParams.get('player') ?? '');
+  const [bracketFilter, setBracketFilter] = useState(searchParams.get('bracket') ?? '');
+  const [winConditionFilter, setWinConditionFilter] = useState(searchParams.get('winCondition') ?? '');
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
   const [savingGameId, setSavingGameId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,15 +45,21 @@ export default function GameHistoryPage() {
         if (isMounted) {
           setGames(nextGames);
           setWinConditionOptions([...new Set([...DEFAULT_WIN_CONDITIONS, ...nextWinConditionOptions])]);
-          setTitleDrafts(
+          setBracketDrafts(
             nextGames.reduce<Record<string, string>>((drafts, game) => {
-              drafts[game.id] = game.title ?? '';
+              drafts[game.id] = String(game.bracket);
               return drafts;
             }, {}),
           );
           setWinConditionDrafts(
             nextGames.reduce<Record<string, string>>((drafts, game) => {
               drafts[game.id] = game.win_condition ?? '';
+              return drafts;
+            }, {}),
+          );
+          setNotesDrafts(
+            nextGames.reduce<Record<string, string>>((drafts, game) => {
+              drafts[game.id] = game.notes ?? '';
               return drafts;
             }, {}),
           );
@@ -79,15 +90,27 @@ export default function GameHistoryPage() {
 
   useEffect(() => {
     const nextPlayerFilter = searchParams.get('player') ?? '';
+    const nextBracketFilter = searchParams.get('bracket') ?? '';
+    const nextWinConditionFilter = searchParams.get('winCondition') ?? '';
     setPlayerFilter(nextPlayerFilter);
+    setBracketFilter(nextBracketFilter);
+    setWinConditionFilter(nextWinConditionFilter);
   }, [searchParams]);
 
-  const handleTitleDraftChange = (gameId: string, title: string) => {
-    setTitleDrafts((currentDrafts) => ({
-      ...currentDrafts,
-      [gameId]: title,
-    }));
-  };
+  useEffect(() => {
+    if (!selectedGameId || isLoading || error) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const selectedGameCard = document.getElementById(`history-game-${selectedGameId}`);
+      selectedGameCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [selectedGameId, isLoading, error, games]);
 
   const handleWinConditionDraftChange = (gameId: string, winCondition: string) => {
     setWinConditionDrafts((currentDrafts) => ({
@@ -96,20 +119,38 @@ export default function GameHistoryPage() {
     }));
   };
 
+  const handleBracketDraftChange = (gameId: string, bracket: string) => {
+    setBracketDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [gameId]: bracket,
+    }));
+  };
+
+  const handleNotesDraftChange = (gameId: string, notes: string) => {
+    setNotesDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [gameId]: notes.slice(0, GAME_NOTES_MAX_LENGTH),
+    }));
+  };
+
   const handleGameSave = async (gameId: string) => {
     try {
       setSavingGameId(gameId);
       setError(null);
 
-      const nextTitle = titleDrafts[gameId]?.trim() || null;
+      const nextBracket = parseInt(bracketDrafts[gameId] ?? '', 10);
       const nextWinCondition = winConditionDrafts[gameId]?.trim();
+      const nextNotes = notesDrafts[gameId]?.trim() || null;
+      if (!Number.isInteger(nextBracket) || nextBracket < 1 || nextBracket > 5) {
+        throw new Error('Please choose a bracket before saving');
+      }
       if (!nextWinCondition) {
         throw new Error('Please choose a win condition before saving');
       }
 
       const { error: updateError } = await supabase
         .from('games')
-        .update({ title: nextTitle, win_condition: nextWinCondition })
+        .update({ bracket: nextBracket, win_condition: nextWinCondition, notes: nextNotes })
         .eq('id', gameId);
 
       if (updateError) {
@@ -124,8 +165,9 @@ export default function GameHistoryPage() {
           game.id === gameId
             ? {
                 ...game,
-                title: nextTitle,
+                bracket: nextBracket,
                 win_condition: nextWinCondition,
+                notes: nextNotes,
                 game_participants: game.game_participants.map((participant) => ({
                   ...participant,
                   is_winner: participant.id === nextWinnerParticipantId,
@@ -157,17 +199,20 @@ export default function GameHistoryPage() {
     ),
   )].sort((left, right) => left.localeCompare(right));
 
-  const filteredGames = playerFilter.trim()
-    ? games.filter((game) =>
-        game.game_participants.some((participant) => readSingleName(participant.player).toLowerCase().includes(playerFilter.trim().toLowerCase())),
-      )
-    : games;
+  const filteredGames = games.filter((game) => {
+    const matchesPlayer = !playerFilter.trim()
+      || game.game_participants.some((participant) => readSingleName(participant.player).toLowerCase().includes(playerFilter.trim().toLowerCase()));
+    const matchesBracket = !bracketFilter || String(game.bracket) === bracketFilter;
+    const matchesWinCondition = !winConditionFilter || game.win_condition === winConditionFilter;
+
+    return matchesPlayer && matchesBracket && matchesWinCondition;
+  });
 
   return (
     <section className='wireframe-shell space-y-4'>
       <div className='space-y-3 text-left'>
         <h1 className='wireframe-title'>Game History</h1>
-        <div className='max-w-xl space-y-2'>
+        <div className='grid gap-3 md:grid-cols-3'>
           <input
             type='text'
             list='history-player-filter-options'
@@ -186,6 +231,50 @@ export default function GameHistoryPage() {
             placeholder='Filter by player name'
             className='app-input'
           />
+          <select
+            value={bracketFilter}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setBracketFilter(nextValue);
+              const nextParams = new URLSearchParams(searchParams);
+              if (nextValue) {
+                nextParams.set('bracket', nextValue);
+              } else {
+                nextParams.delete('bracket');
+              }
+              setSearchParams(nextParams, { replace: true });
+            }}
+            className='app-input'
+          >
+            <option value=''>All brackets</option>
+            <option value='1'>Bracket 1</option>
+            <option value='2'>Bracket 2</option>
+            <option value='3'>Bracket 3</option>
+            <option value='4'>Bracket 4</option>
+            <option value='5'>Bracket 5</option>
+          </select>
+          <select
+            value={winConditionFilter}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setWinConditionFilter(nextValue);
+              const nextParams = new URLSearchParams(searchParams);
+              if (nextValue) {
+                nextParams.set('winCondition', nextValue);
+              } else {
+                nextParams.delete('winCondition');
+              }
+              setSearchParams(nextParams, { replace: true });
+            }}
+            className='app-input'
+          >
+            <option value=''>All win conditions</option>
+            {winConditionOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
           <datalist id='history-player-filter-options'>
             {availablePlayers.map((player) => (
               <option key={player} value={player} />
@@ -203,43 +292,86 @@ export default function GameHistoryPage() {
 
       {!isLoading && !error && games.length > 0 && filteredGames.length === 0 && (
         <div className='app-card text-left'>
-          <p className='text-lg font-semibold'>No games match that player</p>
-          <p className='app-muted mt-2 text-sm'>Try a different player name, or clear the filter to see every saved game.</p>
+          <p className='text-lg font-semibold'>No games match those filters</p>
+          <p className='app-muted mt-2 text-sm'>Try a different player, bracket, or win condition, or clear the filters to see every saved game.</p>
         </div>
       )}
 
       {!isLoading && !error && filteredGames.length > 0 && (
         <div className='space-y-4'>
           {filteredGames.map((game) => (
-            <article key={game.id} className='app-card text-left'>
-              <div className='flex flex-wrap items-center justify-between gap-3 border-b pb-3' style={{ borderColor: 'var(--app-panel-strong)' }}>
+            <article
+              key={game.id}
+              id={`history-game-${game.id}`}
+              className={`app-card text-left ${selectedGameId === game.id ? 'history-game-selected' : ''}`}
+            >
+              <div className='flex flex-wrap items-start justify-between gap-3 border-b pb-3 md:flex-nowrap' style={{ borderColor: 'var(--app-panel-strong)' }}>
                 <div className='min-w-0 flex-1 space-y-3'>
-                  <p className='app-muted text-sm font-semibold uppercase tracking-[0.2em]'>Game #{game.gameNumber}</p>
-                  <p className='text-2xl font-semibold md:text-3xl'>{formatPlayedAt(game.played_at)}</p>
+                  <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+                    <p className='app-muted text-base font-semibold uppercase tracking-[0.18em] md:text-lg'>Game #{game.gameNumber}</p>
+                    <p className='app-muted text-base md:text-lg'>{formatPlayedAt(game.played_at)}</p>
+                    <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
+                    <p className='app-muted text-base md:text-lg'>{game.number_of_players} players</p>
+                    {editingGameId === game.id ? (
+                      <>
+                        <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
+                        <select
+                          value={bracketDrafts[game.id] ?? String(game.bracket)}
+                          onChange={(event) => handleBracketDraftChange(game.id, event.target.value)}
+                          className='app-input-compact min-w-[8.5rem]'
+                        >
+                          <option value='1'>Bracket 1</option>
+                          <option value='2'>Bracket 2</option>
+                          <option value='3'>Bracket 3</option>
+                          <option value='4'>Bracket 4</option>
+                          <option value='5'>Bracket 5</option>
+                        </select>
+                        <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
+                        <select
+                          value={winConditionDrafts[game.id] ?? ''}
+                          onChange={(event) => handleWinConditionDraftChange(game.id, event.target.value)}
+                          className='app-input-compact min-w-[13rem] flex-1'
+                        >
+                          <option value=''>Select win condition</option>
+                          {winConditionOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <>
+                        <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
+                        <p className='app-muted text-base md:text-lg'>Bracket {game.bracket}</p>
+                        <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
+                        <p className='app-muted text-base md:text-lg'>{game.win_condition}</p>
+                      </>
+                    )}
+                  </div>
+
                   {editingGameId === game.id ? (
-                    <input
-                      type='text'
-                      value={titleDrafts[game.id] ?? ''}
-                      onChange={(event) => handleTitleDraftChange(game.id, event.target.value)}
-                      placeholder={`Game #${game.gameNumber} title`}
-                      className='app-input-compact text-xl font-semibold md:text-2xl'
-                    />
-                  ) : (
-                    <p className='text-xl font-semibold md:text-2xl'>{game.title?.trim() || `Untitled Game #${game.gameNumber}`}</p>
-                  )}
-                  <p className='app-muted text-base md:text-lg'>
-                    {game.number_of_players} players · Bracket {game.bracket} · {game.win_condition}
-                  </p>
+                    <div className='game-notes-panel'>
+                      <p className='game-notes-label'>Game Notes</p>
+                      <textarea
+                        value={notesDrafts[game.id] ?? ''}
+                        onChange={(event) => handleNotesDraftChange(game.id, event.target.value)}
+                        maxLength={GAME_NOTES_MAX_LENGTH}
+                        className='app-input game-notes-input game-notes-textarea text-sm md:text-base'
+                        placeholder='Add any table notes, memorable plays, or context for this game'
+                      />
+                      <p className='game-notes-count'>
+                        {(notesDrafts[game.id] ?? '').length}/{GAME_NOTES_MAX_LENGTH}
+                      </p>
+                    </div>
+                  ) : game.notes ? (
+                    <div className='game-notes-panel'>
+                      <p className='game-notes-label'>Game Notes</p>
+                      <p className='game-notes-display'>{game.notes}</p>
+                    </div>
+                  ) : null}
                 </div>
-                <div className='flex items-center gap-2'>
-                  <button
-                    type='button'
-                    onClick={() => setEditingGameId((currentGameId) => currentGameId === game.id ? null : game.id)}
-                    className='rounded-full border px-4 py-2 text-sm font-semibold'
-                    style={{ borderColor: 'var(--app-border)' }}
-                  >
-                    {editingGameId === game.id ? 'Close edit' : 'Edit game'}
-                  </button>
+                <div className='flex w-full shrink-0 flex-col items-end gap-2 self-start md:w-[22rem]'>
                   <div
                     className='app-chip border'
                     style={{
@@ -249,34 +381,27 @@ export default function GameHistoryPage() {
                   >
                     {game.game_participants.filter((participant) => participant.is_winner).length === 1 ? 'Winner locked in' : 'No winner assigned'}
                   </div>
-                </div>
-              </div>
-
-              {editingGameId === game.id && (
-                <div className='mt-4 flex flex-wrap items-center gap-2'>
-                  <select
-                    value={winConditionDrafts[game.id] ?? ''}
-                    onChange={(event) => handleWinConditionDraftChange(game.id, event.target.value)}
-                    className='app-input-compact min-w-[14rem] flex-1'
-                  >
-                    <option value=''>Select win condition</option>
-                    {winConditionOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
                   <button
                     type='button'
-                    onClick={() => handleGameSave(game.id)}
-                    disabled={savingGameId === game.id}
-                    className='rounded-full border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50'
+                    onClick={() => setEditingGameId((currentGameId) => currentGameId === game.id ? null : game.id)}
+                    className='rounded-full border px-4 py-2 text-sm font-semibold'
                     style={{ borderColor: 'var(--app-border)' }}
                   >
-                    {savingGameId === game.id ? 'Saving...' : 'Save edits'}
+                    {editingGameId === game.id ? 'Close edit' : 'Edit game'}
                   </button>
+                  {editingGameId === game.id && (
+                    <button
+                      type='button'
+                      onClick={() => handleGameSave(game.id)}
+                      disabled={savingGameId === game.id}
+                      className='rounded-full border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50'
+                      style={{ borderColor: 'var(--app-border)' }}
+                    >
+                      {savingGameId === game.id ? 'Saving...' : 'Save edits'}
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
 
               <ul className='mt-4 flex gap-3 overflow-x-auto pb-1'>
                 {[...game.game_participants]
@@ -291,7 +416,12 @@ export default function GameHistoryPage() {
                         <div className='flex items-start justify-between gap-3'>
                           <div className='min-w-0'>
                             <p className='app-muted text-xs font-bold uppercase tracking-[0.25em]'>Seat {participant.turn_order_position}</p>
-                            <p className='font-medium'>{readSingleName(participant.player)}</p>
+                            <Link
+                              to={`/players?player=${encodeURIComponent(readSingleName(participant.player))}`}
+                              className='font-medium underline decoration-transparent underline-offset-2 transition hover:decoration-current'
+                            >
+                              {readSingleName(participant.player)}
+                            </Link>
                           </div>
                           {editingGameId === game.id ? (
                             <button
@@ -366,7 +496,6 @@ export default function GameHistoryPage() {
                   })}
               </ul>
 
-              {game.notes && <p className='app-card-soft app-muted mt-4 px-3 py-2 text-sm'>{game.notes}</p>}
             </article>
           ))}
         </div>

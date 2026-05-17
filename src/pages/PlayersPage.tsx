@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchNumberedGames, fetchPlayerDirectory, readSingleCommander, type NumberedHistoryGame, type PlayerDirectoryEntry } from '../lib/gameRecords';
 import { getScryfallSearchUrl } from '../lib/scryfall';
 
@@ -15,12 +15,36 @@ function formatWinRate(value: number) {
 
 export default function PlayersPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [players, setPlayers] = useState<PlayerDirectoryEntry[]>([]);
   const [games, setGames] = useState<NumberedHistoryGame[]>([]);
-  const [searchValue, setSearchValue] = useState('');
+  const [searchValue, setSearchValue] = useState(searchParams.get('player') ?? '');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const deferredSearchValue = useDeferredValue(searchValue.trim().toLowerCase());
+
+  useEffect(() => {
+    setSearchValue(searchParams.get('player') ?? '');
+  }, [searchParams]);
+
+  const handleSearchChange = (value: string) => {
+    setSearchValue(value);
+
+    const nextParams = new URLSearchParams(searchParams);
+    if (value.trim()) {
+      nextParams.set('player', value);
+    } else {
+      nextParams.delete('player');
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const clearSearchFilter = () => {
+    setSearchValue('');
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('player');
+    setSearchParams(nextParams, { replace: true });
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -211,14 +235,25 @@ export default function PlayersPage() {
         </div>
       </div>
 
-      <div className='max-w-xl'>
+      <div className='player-search-bar'>
+        <p className='player-search-copy'>Filter</p>
         <input
           type='text'
           value={searchValue}
-          onChange={(event) => setSearchValue(event.target.value)}
+          onChange={(event) => handleSearchChange(event.target.value)}
           placeholder='Search players or commanders'
-          className='app-input h-12 px-4 py-2 text-base'
+          className='app-input h-12 min-w-0 flex-1 px-4 py-2 text-base'
         />
+        {searchValue.trim() && (
+          <button
+            type='button'
+            onClick={clearSearchFilter}
+            className='player-search-clear'
+            aria-label='Clear player filter'
+          >
+            X
+          </button>
+        )}
       </div>
 
       {isLoading && <p className='wireframe-copy'>Loading player directory...</p>}

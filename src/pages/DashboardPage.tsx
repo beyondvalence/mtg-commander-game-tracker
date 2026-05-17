@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { fetchDashboardSnapshot, readSingleName, type NumberedHistoryGame } from '../lib/gameRecords';
 
 type DashboardSnapshot = {
   totalGames: number;
   totalCommanders: number;
+  totalPlayers: number;
   latestGame: NumberedHistoryGame | null;
   recentGames: NumberedHistoryGame[];
 };
@@ -15,6 +17,7 @@ function formatPlayedAt(value: string) {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,9 +57,18 @@ export default function DashboardPage() {
   return (
     <section className='wireframe-shell'>
       <div className='space-y-6'>
-        <div className='space-y-2'>
-          <h1 className='wireframe-title'>Dashboard</h1>
-          <p className='wireframe-copy app-muted'>Your home page now reads live totals and recent results directly from Supabase.</p>
+        <div className='flex flex-wrap items-start justify-between gap-4'>
+          <div className='space-y-2'>
+            <h1 className='wireframe-title'>Pod Highlights</h1>
+          </div>
+          <Link to='/add-game' className='app-card dashboard-add-game-card dashboard-header-add-game'>
+            <div className='dashboard-add-game-row'>
+              <div className='dashboard-add-game-plus' aria-hidden='true'>
+                +
+              </div>
+              <p className='dashboard-add-game-label'>Add Game</p>
+            </div>
+          </Link>
         </div>
 
         {isLoading && <p className='wireframe-copy'>Loading tracker summary...</p>}
@@ -64,40 +76,44 @@ export default function DashboardPage() {
 
         {!isLoading && !error && snapshot && (
           <>
-            <div className='grid gap-4 md:grid-cols-2'>
-              <div className='app-card'>
-                <p className='text-lg font-semibold'>Total Games</p>
-                <p className='text-4xl font-bold'>{snapshot.totalGames}</p>
-                <p className='app-muted mt-2 text-sm'>
-                  {snapshot.totalGames > 0 ? `Latest entry is Game #${snapshot.latestGame?.gameNumber ?? snapshot.totalGames}.` : 'Your first saved game will appear here.'}
-                </p>
-              </div>
+            <div className='grid gap-4 md:grid-cols-4'>
+              <Link to='/history' className='app-card dashboard-link-card'>
+                <p className='dashboard-stat-label'>Total Games</p>
+                <p className='dashboard-stat-value'>{snapshot.totalGames}</p>
+              </Link>
 
-              <div className='app-card'>
-                <p className='text-lg font-semibold'>Commanders</p>
-                <p className='text-4xl font-bold'>{snapshot.totalCommanders}</p>
-                <p className='app-muted mt-2 text-sm'>Unique commanders saved in your connected project.</p>
-              </div>
-            </div>
+              <Link to='/players' className='app-card dashboard-link-card'>
+                <p className='dashboard-stat-label'>Players in Pod</p>
+                <p className='dashboard-stat-value'>{snapshot.totalPlayers}</p>
+              </Link>
 
-            {snapshot.latestGame && (
-              <article className='app-card text-left'>
-                <p className='app-muted text-sm font-semibold uppercase tracking-[0.2em]'>Latest Game</p>
-                <div className='mt-2 flex flex-wrap items-center justify-between gap-3'>
-                  <div>
-                    <h2 className='text-2xl font-semibold'>Game #{snapshot.latestGame.gameNumber}</h2>
-                    <p className='app-muted text-sm'>
-                      {formatPlayedAt(snapshot.latestGame.played_at)} · {snapshot.latestGame.number_of_players} players · {snapshot.latestGame.win_condition}
-                    </p>
-                  </div>
-                  {latestWinner && (
-                    <div className='rounded-full border border-emerald-700 px-4 py-2 text-sm font-semibold text-emerald-700'>
-                      Winner: {readSingleName(latestWinner.player)}
+              <Link to='/players' className='app-card dashboard-link-card'>
+                <p className='dashboard-stat-label'>Commanders</p>
+                <p className='dashboard-stat-value'>{snapshot.totalCommanders}</p>
+              </Link>
+
+              {snapshot.latestGame && (
+                <Link
+                  to={`/history?game=${encodeURIComponent(snapshot.latestGame.id)}`}
+                  className='app-card dashboard-link-card dashboard-feature-card text-left'
+                >
+                  <p className='app-muted text-sm font-semibold uppercase tracking-[0.2em]'>Latest Game</p>
+                  <div className='mt-2 flex flex-1 flex-wrap items-center justify-between gap-3'>
+                    <div>
+                      <h2 className='text-xl font-semibold'>Game #{snapshot.latestGame.gameNumber}</h2>
+                      <p className='app-muted text-sm'>
+                        {formatPlayedAt(snapshot.latestGame.played_at)} · {snapshot.latestGame.number_of_players} players · {snapshot.latestGame.win_condition}
+                      </p>
                     </div>
-                  )}
-                </div>
-              </article>
-            )}
+                    {latestWinner && (
+                      <div className='rounded-full border border-emerald-700 px-4 py-2 text-sm font-semibold text-emerald-700'>
+                        Winner: {readSingleName(latestWinner.player)}
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              )}
+            </div>
 
             <div className='app-card text-left'>
               <div className='flex flex-wrap items-center justify-between gap-3'>
@@ -113,18 +129,24 @@ export default function DashboardPage() {
                     const winner = game.game_participants.find((participant) => participant.is_winner) ?? null;
 
                     return (
-                      <li key={game.id} className='app-card-soft px-4 py-3'>
-                        <div className='flex flex-wrap items-center justify-between gap-3'>
-                          <div>
-                            <p className='font-semibold'>Game #{game.gameNumber}</p>
+                      <li key={game.id}>
+                        <button
+                          type='button'
+                          className='app-card-soft dashboard-recent-game w-full px-4 py-3 text-left transition'
+                          onClick={() => navigate(`/history?game=${encodeURIComponent(game.id)}`)}
+                        >
+                          <div className='flex flex-wrap items-center justify-between gap-3'>
+                            <div>
+                              <p className='font-semibold'>Game #{game.gameNumber}</p>
+                              <p className='app-muted text-sm'>
+                                {formatPlayedAt(game.played_at)} · {game.win_condition}
+                              </p>
+                            </div>
                             <p className='app-muted text-sm'>
-                              {formatPlayedAt(game.played_at)} · {game.win_condition}
+                              {winner ? `Winner: ${readSingleName(winner.player)}` : 'Winner not recorded'}
                             </p>
                           </div>
-                          <p className='app-muted text-sm'>
-                            {winner ? `Winner: ${readSingleName(winner.player)}` : 'Winner not recorded'}
-                          </p>
-                        </div>
+                        </button>
                       </li>
                     );
                   })}

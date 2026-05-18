@@ -8,7 +8,7 @@
 - Dashboard now surfaces compact live stat cards, a top-row `Add Game` tile, and clickable recent-game rows with compact metadata, seat-order summaries, and winner badges.
 - Add Game supports optional unfinished games, reusable win-condition suggestions, case-sensitive player-name autocomplete matching, player-specific commander suggestions, partner/background-style secondary commanders, centered commander art, one-at-a-time partner/background carousel controls, a collapsed-by-default notes section behind a caret toggle, and finished-game-only `service` plus `turn length` selectors.
 - Game History supports inline game editing for bracket, win condition, notes, and winner selection, with winner changes applied through the shared `set_game_winner` database function, plus seat-card art alignment that stays visually consistent when some players have two commanders and case-sensitive player filtering.
-- Players renders live player tiles plus summary stat cards derived from saved history, along with URL-backed, case-sensitive filtering.
+- Players renders live player tiles plus SQL-backed summary stat cards derived from saved history, along with URL-backed, case-sensitive filtering.
 
 ## Recent Work
 
@@ -35,6 +35,18 @@
 - Expanded Players summary cards to include most-played player, highest win-rate player, most-played commander, and highest commander win rate, plus a clearer filter bar with inline reset.
 - Fixed the live `set_game_winner` SQL function so winner changes safely clear the old winner before assigning the new one, avoiding the unique partial-index violation on `game_participants.is_winner`.
 - Applied a live Supabase consistency patch that tightens winner-field enforcement, syncs `games.number_of_players` from `game_participants`, and backfills any existing winner/count drift.
+- Moved dashboard counts, game numbering, player directory rows, commander rollups, and Players summary-card aggregation into SQL-backed Supabase views.
+- Hardened existing public functions by pinning their `search_path` after Supabase advisors flagged mutable function search paths.
+- Reviewed the `/supabase` SQL files and classified migration files as applied-once history, while identifying loose patch scripts as historical single-use artifacts rather than recurring maintenance scripts.
+- Reviewed the summary-view implementation and fixed the History participant fetch so full-history reads no longer build a giant `IN (...)` list of every game ID; limited Dashboard reads still scope participants to the three recent games.
+
+## Current Session Summary
+
+- Used the Supabase workflow to move player, commander, dashboard, and game-number aggregation into SQL-backed views.
+- Applied the summary-view migration to the linked Supabase project and validated the live view outputs.
+- Performed a code review of the aggregation changes, fixed the full-history participant query scaling issue, and ran build/test validation.
+- Ran Supabase advisors, found existing mutable function `search_path` warnings, added and applied a function-hardening migration, and recorded that the follow-up advisor rerun was blocked by temporary Supabase auth/circuit-breaker failures.
+- Reviewed SQL files under `/supabase`: files in `supabase/migrations/` are canonical applied-once migration history; `supabase/create_game_with_participants_patch.sql` and `supabase/review_consistency_patch.sql` are single-use patch artifacts kept only for historical reference unless archived or removed.
 
 ## Key Files
 
@@ -55,13 +67,17 @@
 - `src/index.css`
   App-wide layout plus the shared visual language for Dashboard, Add Game, History, Players, commander art stages, and notes panels.
 - `schema.sql`
-  Current schema plus the corrected `set_game_winner` function, the transactional `create_game_with_participants` RPC, `games.service` and `games.turn_length`, stricter winner consistency enforcement, and participant-count sync triggers.
-- `supabase/create_game_with_participants_patch.sql`
-  Patch file for applying the transactional Add Game RPC to the live Supabase project.
+  Current schema plus the corrected `set_game_winner` function, the transactional `create_game_with_participants` RPC, `games.service` and `games.turn_length`, stricter winner consistency enforcement, participant-count sync triggers, and SQL summary views.
 - `supabase/migrations/20260518032500_add_game_service_and_turn_length.sql`
   Migration for the `service` and `turn_length` game fields plus the updated live RPC signature and existing-game backfill.
 - `supabase/review_consistency_patch.sql`
-  Applied live-database patch for winner consistency enforcement, `number_of_players` sync, and one-time backfill of existing inconsistencies.
+  Historical single-use live-database patch for winner consistency enforcement, `number_of_players` sync, and one-time backfill of existing inconsistencies; not meant for regular reuse.
+- `supabase/create_game_with_participants_patch.sql`
+  Historical single-use patch script for the transactional Add Game RPC and related `service`/`turn_length` fields; now redundant with canonical migrations and `schema.sql`.
+- `supabase/migrations/20260518184620_add_summary_aggregation_views.sql`
+  Migration for `numbered_games`, `dashboard_summary`, `commander_summary_entries`, `player_directory_entries`, and `player_page_summary` views.
+- `supabase/migrations/20260518190426_set_function_search_paths.sql`
+  Migration that pins `search_path` for existing public trigger/RPC functions.
 
 ## Validation Status
 
@@ -103,12 +119,19 @@
   - the trigger `trg_sync_game_participant_count` exists
   - winner inconsistency count is `0`
   - player-count inconsistency count is `0`
+- Live Supabase validation after the summary-view migration confirmed:
+  - remote migration `20260518184620` is recorded as applied
+  - `dashboard_summary` returns `8` games, `26` commanders, and `24` players
+  - `numbered_games` returns `8` games numbered from `1` through `8`
+  - `player_page_summary` returns `21` history-backed players, `20` history-backed commanders, and `8` wins
+- Live Supabase validation after function hardening confirmed:
+  - remote migration `20260518190426` is recorded as applied
+  - a follow-up advisor rerun was blocked by Supabase temp-role authentication failures and a temporary circuit breaker
 
 ## Known Caveats
 
 - The app still uses broad public Supabase access with permissive RLS for this no-login setup.
 - Player identity is still case-sensitive at the database level by design, so differently cased names remain distinct players.
-- Players summary cards currently derive their metrics client-side from full history reads, which will eventually become a scaling bottleneck.
 - History and Players filters are URL-backed client filters rather than server-side filtered queries.
 - The repo still contains `src/pages/CommandersPage.tsx`, but the route now redirects to home and the page is no longer exposed in navigation.
 
@@ -116,7 +139,10 @@
 
 - Add a first-kill field or selector.
 - Add a died-alone selector.
-- Consider pushing player and commander summary aggregation into SQL for better performance at larger data volumes.
+- Decide whether to archive or delete historical single-use SQL patch files:
+  - `supabase/create_game_with_participants_patch.sql`
+  - `supabase/review_consistency_patch.sql`
+- Rerun Supabase advisors later after the temporary linked-project auth/circuit-breaker issue clears, and confirm only the intentional permissive no-login RLS warnings remain.
 
 ## Ignored Local Files
 

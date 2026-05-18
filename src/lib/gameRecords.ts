@@ -29,17 +29,6 @@ export type NumberedHistoryGame = HistoryGame & {
   gameNumber: number;
 };
 
-function isMissingBracketColumnError(error: unknown) {
-  if (!error || typeof error !== 'object') {
-    return false;
-  }
-
-  const code = 'code' in error ? error.code : null;
-  const message = 'message' in error && typeof error.message === 'string' ? error.message.toLowerCase() : '';
-
-  return (code === 'PGRST204' || code === '42703') && message.includes('bracket');
-}
-
 export type PlayerDirectoryEntry = {
   id: string;
   name: string;
@@ -53,6 +42,16 @@ export type PlayerDirectoryEntry = {
     imageUrl: string | null;
     appearances: number;
   }>;
+};
+
+export type PlayerPageSummary = {
+  totalPlayers: number;
+  totalWins: number;
+  totalCommanders: number;
+  mostGamesPlayer: { name: string; gamesPlayed: number } | null;
+  highestWinRatePlayer: { name: string; gamesPlayed: number; wins: number; winRate: number } | null;
+  mostPopularCommander: { name: string; appearances: number } | null;
+  highestCommanderWinRate: { name: string; wins: number; appearances: number; winRate: number } | null;
 };
 
 type CommanderRow = {
@@ -82,6 +81,35 @@ export type CreateGameParticipantPayload = {
   isWinner: boolean;
 };
 
+type NumberedGameRow = Omit<HistoryGame, 'game_participants'> & {
+  game_number: number;
+};
+
+type HistoryGameParticipantRow = HistoryGameParticipant & {
+  game_id: string;
+};
+
+type PlayerDirectoryRow = {
+  id: string;
+  name: string;
+  games_played: number;
+  wins: number;
+  win_rate: number;
+  latest_played_at: string;
+  latest_game_number: number;
+  commanders: unknown;
+};
+
+type PlayerPageSummaryRow = {
+  total_players: number;
+  total_wins: number;
+  total_commanders: number;
+  most_games_player: unknown;
+  highest_win_rate_player: unknown;
+  most_popular_commander: unknown;
+  highest_commander_win_rate: unknown;
+};
+
 export async function fetchWinConditionSuggestions() {
   const { data, error } = await supabase
     .from('games')
@@ -96,44 +124,143 @@ export async function fetchWinConditionSuggestions() {
     .sort((left, right) => left.localeCompare(right));
 }
 
-function toNumberedGames(games: HistoryGame[]) {
-  const chronological = [...games].sort((left, right) => {
-    const playedAtOrder = left.played_at.localeCompare(right.played_at);
-    if (playedAtOrder !== 0) {
-      return playedAtOrder;
-    }
-
-    const createdAtOrder = left.created_at.localeCompare(right.created_at);
-    if (createdAtOrder !== 0) {
-      return createdAtOrder;
-    }
-
-    return left.id.localeCompare(right.id);
-  });
-
-  const gameNumbers = new Map(chronological.map((game, index) => [game.id, index + 1]));
-
-  return [...games]
-    .sort((left, right) => {
-      const playedAtOrder = right.played_at.localeCompare(left.played_at);
-      if (playedAtOrder !== 0) {
-        return playedAtOrder;
-      }
-
-      const createdAtOrder = right.created_at.localeCompare(left.created_at);
-      if (createdAtOrder !== 0) {
-        return createdAtOrder;
-      }
-
-      return right.id.localeCompare(left.id);
-    })
-    .map((game) => ({
-      ...game,
-      gameNumber: gameNumbers.get(game.id) ?? 0,
-    }));
+function toNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
-export async function fetchNumberedGames() {
+function readSummaryObject<T extends Record<string, unknown>>(value: unknown): T | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as T;
+}
+
+function parsePlayerCommanders(value: unknown): PlayerDirectoryEntry['commanders'] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((commander) => {
+      const row = readSummaryObject(commander);
+      if (!row || typeof row.name !== 'string') {
+        return null;
+      }
+
+      return {
+        name: row.name,
+        imageUrl: typeof row.imageUrl === 'string' ? row.imageUrl : null,
+        appearances: toNumber(row.appearances),
+      };
+    })
+    .filter((commander): commander is PlayerDirectoryEntry['commanders'][number] => Boolean(commander));
+}
+
+function toPlayerDirectoryEntry(row: PlayerDirectoryRow): PlayerDirectoryEntry {
+  return {
+    id: row.id,
+    name: row.name,
+    gamesPlayed: row.games_played,
+    wins: row.wins,
+    winRate: row.win_rate,
+    latestPlayedAt: row.latest_played_at,
+    latestGameNumber: row.latest_game_number,
+    commanders: parsePlayerCommanders(row.commanders),
+  };
+}
+
+function toPlayerPageSummary(row: PlayerPageSummaryRow | null): PlayerPageSummary {
+  const mostGamesPlayer = readSummaryObject<{ name?: unknown; gamesPlayed?: unknown }>(row?.most_games_player);
+  const highestWinRatePlayer = readSummaryObject<{ name?: unknown; gamesPlayed?: unknown; wins?: unknown; winRate?: unknown }>(row?.highest_win_rate_player);
+  const mostPopularCommander = readSummaryObject<{ name?: unknown; appearances?: unknown }>(row?.most_popular_commander);
+  const highestCommanderWinRate = readSummaryObject<{ name?: unknown; wins?: unknown; appearances?: unknown; winRate?: unknown }>(row?.highest_commander_win_rate);
+
+  return {
+    totalPlayers: row?.total_players ?? 0,
+    totalWins: row?.total_wins ?? 0,
+    totalCommanders: row?.total_commanders ?? 0,
+    mostGamesPlayer: typeof mostGamesPlayer?.name === 'string'
+      ? { name: mostGamesPlayer.name, gamesPlayed: toNumber(mostGamesPlayer.gamesPlayed) }
+      : null,
+    highestWinRatePlayer: typeof highestWinRatePlayer?.name === 'string'
+      ? {
+          name: highestWinRatePlayer.name,
+          gamesPlayed: toNumber(highestWinRatePlayer.gamesPlayed),
+          wins: toNumber(highestWinRatePlayer.wins),
+          winRate: toNumber(highestWinRatePlayer.winRate),
+        }
+      : null,
+    mostPopularCommander: typeof mostPopularCommander?.name === 'string'
+      ? { name: mostPopularCommander.name, appearances: toNumber(mostPopularCommander.appearances) }
+      : null,
+    highestCommanderWinRate: typeof highestCommanderWinRate?.name === 'string'
+      ? {
+          name: highestCommanderWinRate.name,
+          wins: toNumber(highestCommanderWinRate.wins),
+          appearances: toNumber(highestCommanderWinRate.appearances),
+          winRate: toNumber(highestCommanderWinRate.winRate),
+        }
+      : null,
+  };
+}
+
+async function fetchParticipantsForGames(gameIds: string[] | null) {
+  let participantsQuery = supabase
+    .from('game_participants')
+    .select(`
+      game_id,
+      id,
+      turn_order_position,
+      is_winner,
+      player:players (
+        id,
+        name
+      ),
+      primary_commander:commanders!game_participants_primary_commander_id_fkey (
+        name,
+        image_url
+      ),
+      secondary_commander:commanders!game_participants_secondary_commander_id_fkey (
+        name,
+        image_url
+      )
+    `)
+    .order('turn_order_position', { ascending: true });
+
+  if (gameIds) {
+    if (gameIds.length === 0) {
+      return new Map<string, HistoryGameParticipant[]>();
+    }
+
+    participantsQuery = participantsQuery.in('game_id', gameIds);
+  }
+
+  const { data, error } = await participantsQuery;
+
+  if (error) {
+    throw error;
+  }
+
+  const participantsByGame = new Map<string, HistoryGameParticipant[]>();
+
+  for (const participant of (data as HistoryGameParticipantRow[] | null) ?? []) {
+    const participants = participantsByGame.get(participant.game_id) ?? [];
+    participants.push({
+      id: participant.id,
+      turn_order_position: participant.turn_order_position,
+      is_winner: participant.is_winner,
+      player: participant.player,
+      primary_commander: participant.primary_commander,
+      secondary_commander: participant.secondary_commander,
+    });
+    participantsByGame.set(participant.game_id, participants);
+  }
+
+  return participantsByGame;
+}
+
+export async function fetchNumberedGames(options: { limit?: number } = {}) {
   const query = `
       id,
       played_at,
@@ -144,194 +271,105 @@ export async function fetchNumberedGames() {
       turn_length,
       win_condition,
       notes,
-      game_participants!game_participants_game_id_fkey (
-        id,
-        turn_order_position,
-        is_winner,
-        player:players (
-          id,
-          name
-        ),
-        primary_commander:commanders!game_participants_primary_commander_id_fkey (
-          name,
-          image_url
-        ),
-        secondary_commander:commanders!game_participants_secondary_commander_id_fkey (
-          name,
-          image_url
-        )
-      )
+      game_number
     `;
 
-  const { data, error } = await supabase
-    .from('games')
+  let gamesQuery = supabase
+    .from('numbered_games')
     .select(query)
     .order('played_at', { ascending: false })
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false });
+
+  if (options.limit) {
+    gamesQuery = gamesQuery.limit(options.limit);
+  }
+
+  const { data, error } = await gamesQuery;
 
   if (error) {
-    if (isMissingBracketColumnError(error)) {
-      const fallbackResult = await supabase
-        .from('games')
-        .select(`
-          id,
-          played_at,
-          created_at,
-          number_of_players,
-          service,
-          turn_length,
-          win_condition,
-          notes,
-          game_participants!game_participants_game_id_fkey (
-            id,
-            turn_order_position,
-            is_winner,
-            player:players (
-              id,
-              name
-            ),
-            primary_commander:commanders!game_participants_primary_commander_id_fkey (
-              name,
-              image_url
-            ),
-            secondary_commander:commanders!game_participants_secondary_commander_id_fkey (
-              name,
-              image_url
-            )
-          )
-    `)
-    .order('played_at', { ascending: false })
-    .order('created_at', { ascending: false });
-
-      if (fallbackResult.error) {
-        throw fallbackResult.error;
-      }
-
-      const fallbackGames = ((fallbackResult.data as Omit<HistoryGame, 'bracket'>[] | null) ?? []).map((game) => ({
-        ...game,
-        bracket: 3,
-        service: 'Convoke' as GameService,
-        turn_length: null,
-      }));
-
-      return toNumberedGames(fallbackGames);
-    }
-
     throw error;
   }
 
-  return toNumberedGames((data as HistoryGame[]) || []);
+  const gameRows = (data as NumberedGameRow[] | null) ?? [];
+  if (gameRows.length === 0) {
+    return [];
+  }
+
+  const participantGameIds = options.limit ? gameRows.map((game) => game.id) : null;
+  const participantsByGame = await fetchParticipantsForGames(participantGameIds);
+
+  return gameRows.map((game) => ({
+    id: game.id,
+    played_at: game.played_at,
+    created_at: game.created_at,
+    number_of_players: game.number_of_players,
+    bracket: game.bracket,
+    service: game.service,
+    turn_length: game.turn_length,
+    win_condition: game.win_condition,
+    notes: game.notes,
+    gameNumber: game.game_number,
+    game_participants: participantsByGame.get(game.id) ?? [],
+  }));
 }
 
 export async function fetchDashboardSnapshot() {
-  const [gamesResult, commandersResult, playersResult] = await Promise.all([
-    fetchNumberedGames(),
-    supabase.from('commanders').select('*', { count: 'exact', head: true }),
-    supabase.from('players').select('*', { count: 'exact', head: true }),
+  const [summaryResult, recentGames] = await Promise.all([
+    supabase
+      .from('dashboard_summary')
+      .select('total_games, total_commanders, total_players')
+      .single(),
+    fetchNumberedGames({ limit: 3 }),
   ]);
 
-  if (commandersResult.error) {
-    throw commandersResult.error;
-  }
-
-  if (playersResult.error) {
-    throw playersResult.error;
+  if (summaryResult.error) {
+    throw summaryResult.error;
   }
 
   return {
-    totalGames: gamesResult.length,
-    totalCommanders: commandersResult.count ?? 0,
-    totalPlayers: playersResult.count ?? 0,
-    latestGame: gamesResult[0] ?? null,
-    recentGames: gamesResult.slice(0, 3),
+    totalGames: summaryResult.data.total_games ?? 0,
+    totalCommanders: summaryResult.data.total_commanders ?? 0,
+    totalPlayers: summaryResult.data.total_players ?? 0,
+    latestGame: recentGames[0] ?? null,
+    recentGames,
   };
 }
 
 export async function fetchPlayerDirectory() {
-  const games = await fetchNumberedGames();
-  const playerMap = new Map<string, PlayerDirectoryEntry>();
+  const { data, error } = await supabase
+    .from('player_directory_entries')
+    .select('id, name, games_played, wins, win_rate, latest_played_at, latest_game_number, commanders')
+    .order('wins', { ascending: false })
+    .order('games_played', { ascending: false })
+    .order('name', { ascending: true });
 
-  for (const game of games) {
-    for (const participant of game.game_participants) {
-      const player = Array.isArray(participant.player) ? participant.player[0] : participant.player;
-      const primaryCommander = readSingleCommander(participant.primary_commander);
-      const secondaryCommander = readSingleCommander(participant.secondary_commander);
-
-      if (!player) {
-        continue;
-      }
-
-      const existingPlayer = playerMap.get(player.id) ?? {
-        id: player.id,
-        name: player.name,
-        gamesPlayed: 0,
-        wins: 0,
-        winRate: 0,
-        latestPlayedAt: game.played_at,
-        latestGameNumber: game.gameNumber,
-        commanders: [],
-      };
-
-      existingPlayer.gamesPlayed += 1;
-      existingPlayer.wins += participant.is_winner ? 1 : 0;
-
-      const commanderMap = new Map(existingPlayer.commanders.map((commander) => [commander.name, commander]));
-
-      for (const commander of [primaryCommander, secondaryCommander]) {
-        if (!commander) {
-          continue;
-        }
-
-        const existingCommander = commanderMap.get(commander.name);
-        if (existingCommander) {
-          existingCommander.appearances += 1;
-          if (!existingCommander.imageUrl && commander.image_url) {
-            existingCommander.imageUrl = commander.image_url;
-          }
-        } else {
-          existingPlayer.commanders.push({
-            name: commander.name,
-            imageUrl: commander.image_url,
-            appearances: 1,
-          });
-        }
-      }
-
-      if (
-        game.played_at > existingPlayer.latestPlayedAt ||
-        (game.played_at === existingPlayer.latestPlayedAt && game.gameNumber > existingPlayer.latestGameNumber)
-      ) {
-        existingPlayer.latestPlayedAt = game.played_at;
-        existingPlayer.latestGameNumber = game.gameNumber;
-      }
-
-      playerMap.set(player.id, existingPlayer);
-    }
+  if (error) {
+    throw error;
   }
 
-  return [...playerMap.values()]
-    .map((player) => ({
-      ...player,
-      winRate: player.gamesPlayed > 0 ? player.wins / player.gamesPlayed : 0,
-      commanders: [...player.commanders].sort((left, right) => {
-        if (right.appearances !== left.appearances) {
-          return right.appearances - left.appearances;
-        }
+  return ((data as PlayerDirectoryRow[] | null) ?? []).map(toPlayerDirectoryEntry);
+}
 
-        return left.name.localeCompare(right.name);
-      }),
-    }))
-    .sort((left, right) => {
-      if (right.wins !== left.wins) {
-        return right.wins - left.wins;
-      }
+export async function fetchPlayerPageSummary() {
+  const { data, error } = await supabase
+    .from('player_page_summary')
+    .select(`
+      total_players,
+      total_wins,
+      total_commanders,
+      most_games_player,
+      highest_win_rate_player,
+      most_popular_commander,
+      highest_commander_win_rate
+    `)
+    .single();
 
-      if (right.gamesPlayed !== left.gamesPlayed) {
-        return right.gamesPlayed - left.gamesPlayed;
-      }
+  if (error) {
+    throw error;
+  }
 
-      return left.name.localeCompare(right.name);
-    });
+  return toPlayerPageSummary(data as PlayerPageSummaryRow | null);
 }
 
 function toCommanderCardSuggestion(commander: CommanderRow): CommanderCard {

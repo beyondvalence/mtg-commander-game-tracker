@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchNumberedGames, fetchPlayerDirectory, readSingleCommander, type NumberedHistoryGame, type PlayerDirectoryEntry } from '../lib/gameRecords';
+import { fetchPlayerDirectory, fetchPlayerPageSummary, type PlayerDirectoryEntry, type PlayerPageSummary } from '../lib/gameRecords';
 import { getScryfallSearchUrl } from '../lib/scryfall';
 
 function formatPlayedAt(value: string) {
@@ -13,11 +13,21 @@ function formatWinRate(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
+const EMPTY_PLAYER_SUMMARY: PlayerPageSummary = {
+  totalPlayers: 0,
+  totalWins: 0,
+  totalCommanders: 0,
+  mostGamesPlayer: null,
+  highestWinRatePlayer: null,
+  mostPopularCommander: null,
+  highestCommanderWinRate: null,
+};
+
 export default function PlayersPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [players, setPlayers] = useState<PlayerDirectoryEntry[]>([]);
-  const [games, setGames] = useState<NumberedHistoryGame[]>([]);
+  const [summary, setSummary] = useState<PlayerPageSummary>(EMPTY_PLAYER_SUMMARY);
   const [searchValue, setSearchValue] = useState(searchParams.get('player') ?? '');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,13 +64,13 @@ export default function PlayersPage() {
         setIsLoading(true);
         setError(null);
 
-        const [nextPlayers, nextGames] = await Promise.all([
+        const [nextPlayers, nextSummary] = await Promise.all([
           fetchPlayerDirectory(),
-          fetchNumberedGames(),
+          fetchPlayerPageSummary(),
         ]);
         if (isMounted) {
           setPlayers(nextPlayers);
-          setGames(nextGames);
+          setSummary(nextSummary);
         }
       } catch (err) {
         if (isMounted) {
@@ -87,100 +97,6 @@ export default function PlayersPage() {
       })
     : players;
 
-  const totalWins = players.reduce((sum, player) => sum + player.wins, 0);
-  const totalCommanders = new Set(players.flatMap((player) => player.commanders.map((commander) => commander.name))).size;
-  const mostGamesPlayer = players.reduce<PlayerDirectoryEntry | null>((leader, player) => {
-    if (!leader || player.gamesPlayed > leader.gamesPlayed) {
-      return player;
-    }
-
-    if (player.gamesPlayed === leader.gamesPlayed && player.name.localeCompare(leader.name) < 0) {
-      return player;
-    }
-
-    return leader;
-  }, null);
-  const commanderTotals = new Map<string, { name: string; appearances: number }>();
-  for (const player of players) {
-    for (const commander of player.commanders) {
-      const existing = commanderTotals.get(commander.name);
-      if (existing) {
-        existing.appearances += commander.appearances;
-      } else {
-        commanderTotals.set(commander.name, { name: commander.name, appearances: commander.appearances });
-      }
-    }
-  }
-  const mostPopularCommander = [...commanderTotals.values()].reduce<{ name: string; appearances: number } | null>((leader, commander) => {
-    if (!leader || commander.appearances > leader.appearances) {
-      return commander;
-    }
-
-    if (commander.appearances === leader.appearances && commander.name.localeCompare(leader.name) < 0) {
-      return commander;
-    }
-
-    return leader;
-  }, null);
-  const highestWinRatePlayer = players.reduce<PlayerDirectoryEntry | null>((leader, player) => {
-    if (!leader || player.winRate > leader.winRate) {
-      return player;
-    }
-
-    if (player.winRate === leader.winRate && player.wins > leader.wins) {
-      return player;
-    }
-
-    if (player.winRate === leader.winRate && player.wins === leader.wins && player.name.localeCompare(leader.name) < 0) {
-      return player;
-    }
-
-    return leader;
-  }, null);
-  const commanderPerformanceTotals = new Map<string, { name: string; wins: number; appearances: number }>();
-  for (const game of games) {
-    for (const participant of game.game_participants) {
-      const primaryCommander = readSingleCommander(participant.primary_commander);
-      const secondaryCommander = readSingleCommander(participant.secondary_commander);
-
-      for (const commander of [primaryCommander, secondaryCommander]) {
-        if (!commander) {
-          continue;
-        }
-
-        const existing = commanderPerformanceTotals.get(commander.name);
-        if (existing) {
-          existing.appearances += 1;
-          existing.wins += participant.is_winner ? 1 : 0;
-        } else {
-          commanderPerformanceTotals.set(commander.name, {
-            name: commander.name,
-            appearances: 1,
-            wins: participant.is_winner ? 1 : 0,
-          });
-        }
-      }
-    }
-  }
-  const highestCommanderWinRate = [...commanderPerformanceTotals.values()].reduce<{ name: string; wins: number; appearances: number } | null>((leader, commander) => {
-    const commanderRate = commander.appearances > 0 ? commander.wins / commander.appearances : 0;
-    const leaderRate = leader && leader.appearances > 0 ? leader.wins / leader.appearances : -1;
-
-    if (!leader || commanderRate > leaderRate) {
-      return commander;
-    }
-
-    if (commanderRate === leaderRate && commander.wins > leader.wins) {
-      return commander;
-    }
-
-    if (commanderRate === leaderRate && commander.wins === leader.wins && commander.name.localeCompare(leader.name) < 0) {
-      return commander;
-    }
-
-    return leader;
-  }, null);
-
   return (
     <section className='wireframe-shell space-y-6'>
       <div className='text-left'>
@@ -191,19 +107,19 @@ export default function PlayersPage() {
         <div className='flex gap-3 overflow-x-auto pb-1'>
           <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
             <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Players in Pod</p>
-            <p className='mt-2 text-3xl font-bold'>{players.length}</p>
+            <p className='mt-2 text-3xl font-bold'>{summary.totalPlayers}</p>
             <p className='app-muted mt-2 text-sm'>Unique player tiles built from saved game history.</p>
           </div>
           <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
             <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Decks Seen</p>
-            <p className='mt-2 text-3xl font-bold'>{totalCommanders}</p>
-            <p className='app-muted mt-2 text-sm'>{totalWins} total wins recorded across all players.</p>
+            <p className='mt-2 text-3xl font-bold'>{summary.totalCommanders}</p>
+            <p className='app-muted mt-2 text-sm'>{summary.totalWins} total wins recorded across all players.</p>
           </div>
           <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
             <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Most Played Commander</p>
-            <p className='mt-2 text-2xl font-bold'>{mostPopularCommander?.name ?? 'No commanders yet'}</p>
+            <p className='mt-2 text-2xl font-bold'>{summary.mostPopularCommander?.name ?? 'No commanders yet'}</p>
             <p className='app-muted mt-2 text-sm'>
-              {mostPopularCommander ? `${mostPopularCommander.appearances} appearances` : 'Play a game to populate this card.'}
+              {summary.mostPopularCommander ? `${summary.mostPopularCommander.appearances} appearances` : 'Play a game to populate this card.'}
             </p>
           </div>
         </div>
@@ -211,24 +127,26 @@ export default function PlayersPage() {
         <div className='flex gap-3 overflow-x-auto pb-1'>
           <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
             <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Most Games</p>
-            <p className='mt-2 text-2xl font-bold'>{mostGamesPlayer?.name ?? 'No players yet'}</p>
+            <p className='mt-2 text-2xl font-bold'>{summary.mostGamesPlayer?.name ?? 'No players yet'}</p>
             <p className='app-muted mt-2 text-sm'>
-              {mostGamesPlayer ? `${mostGamesPlayer.gamesPlayed} games played` : 'Play a game to populate this card.'}
+              {summary.mostGamesPlayer ? `${summary.mostGamesPlayer.gamesPlayed} games played` : 'Play a game to populate this card.'}
             </p>
           </div>
           <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
             <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Highest Win Rate</p>
-            <p className='mt-2 text-2xl font-bold'>{highestWinRatePlayer?.name ?? 'No players yet'}</p>
+            <p className='mt-2 text-2xl font-bold'>{summary.highestWinRatePlayer?.name ?? 'No players yet'}</p>
             <p className='app-muted mt-2 text-sm'>
-              {highestWinRatePlayer ? `${formatWinRate(highestWinRatePlayer.winRate)} over ${highestWinRatePlayer.gamesPlayed} games` : 'Play a game to populate this card.'}
+              {summary.highestWinRatePlayer
+                ? `${formatWinRate(summary.highestWinRatePlayer.winRate)} over ${summary.highestWinRatePlayer.gamesPlayed} games`
+                : 'Play a game to populate this card.'}
             </p>
           </div>
           <div className='app-card min-w-[13rem] flex-1 px-3 py-3'>
             <p className='text-sm font-semibold uppercase tracking-[0.2em] app-muted'>Best Commander Win Rate</p>
-            <p className='mt-2 text-2xl font-bold'>{highestCommanderWinRate?.name ?? 'No commanders yet'}</p>
+            <p className='mt-2 text-2xl font-bold'>{summary.highestCommanderWinRate?.name ?? 'No commanders yet'}</p>
             <p className='app-muted mt-2 text-sm'>
-              {highestCommanderWinRate
-                ? `${formatWinRate(highestCommanderWinRate.wins / highestCommanderWinRate.appearances)} over ${highestCommanderWinRate.appearances} games`
+              {summary.highestCommanderWinRate
+                ? `${formatWinRate(summary.highestCommanderWinRate.winRate)} over ${summary.highestCommanderWinRate.appearances} games`
                 : 'Play a game to populate this card.'}
             </p>
           </div>

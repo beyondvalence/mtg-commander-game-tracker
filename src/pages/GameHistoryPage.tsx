@@ -318,6 +318,14 @@ export default function GameHistoryPage() {
                     <p className='app-muted text-base md:text-lg'>{formatPlayedAt(game.played_at)}</p>
                     <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
                     <p className='app-muted text-base md:text-lg'>{game.number_of_players} players</p>
+                    <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
+                    <p className='app-muted text-base md:text-lg'>{game.service}</p>
+                    {game.turn_length ? (
+                      <>
+                        <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
+                        <p className='app-muted text-base md:text-lg'>{game.turn_length} turns</p>
+                      </>
+                    ) : null}
                     {editingGameId === game.id ? (
                       <>
                         <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>

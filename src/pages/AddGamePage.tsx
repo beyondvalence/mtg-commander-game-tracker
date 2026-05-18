@@ -2,9 +2,13 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { CommanderAutocomplete } from '../components/CommanderAutocomplete';
-import { fetchAddGamePlayerSuggestions, fetchWinConditionSuggestions, setGameWinner, type AddGamePlayerSuggestion } from '../lib/gameRecords';
+import {
+  createGameWithParticipants,
+  fetchAddGamePlayerSuggestions,
+  fetchWinConditionSuggestions,
+  type AddGamePlayerSuggestion,
+} from '../lib/gameRecords';
 import { getScryfallSearchUrl } from '../lib/scryfall';
-import { supabase } from '../lib/supabase';
 import type { CommanderCard } from '../types/app';
 import type { ParticipantInput } from '../types/app';
 
@@ -12,6 +16,8 @@ type AddGameFormValues = {
   playedAt: string;
   playersCount: string;
   bracket: string;
+  service: 'paper' | 'Convoke' | 'Spelltable';
+  turnLength: string;
   finishedGame: boolean;
   winCondition: string;
   customWinCondition: string;
@@ -19,9 +25,11 @@ type AddGameFormValues = {
 };
 
 const DEFAULT_WIN_CONDITIONS = ['Combat', 'Combo', 'Commander Damage', 'Other'] as const;
+const SERVICE_OPTIONS = ['paper', 'Convoke', 'Spelltable'] as const;
 const CUSTOM_WIN_CONDITION_VALUE = '__custom__';
 const UNFINISHED_GAME_WIN_CONDITION = 'Unfinished';
 const GAME_NOTES_MAX_LENGTH = 500;
+const TURN_LENGTH_OPTIONS = Array.from({ length: 20 }, (_, index) => index + 1);
 
 function createParticipantSeat(seat: number): ParticipantInput {
   return {
@@ -88,17 +96,6 @@ function isSecondarySelectionValid(primary: CommanderCard | null | undefined, se
   return !isBackgroundCard(secondary);
 }
 
-function isMissingBracketColumnError(error: unknown) {
-  if (!error || typeof error !== 'object') {
-    return false;
-  }
-
-  const code = 'code' in error ? error.code : null;
-  const message = 'message' in error && typeof error.message === 'string' ? error.message.toLowerCase() : '';
-
-  return (code === 'PGRST204' || code === '42703') && message.includes('bracket');
-}
-
 function normalizePlayerName(value: string) {
   return value.trim();
 }
@@ -109,6 +106,8 @@ export default function AddGamePage() {
       playedAt: new Date().toISOString().slice(0, 10),
       playersCount: '4',
       bracket: '3',
+      service: 'Convoke',
+      turnLength: '',
       finishedGame: true,
       winCondition: '',
       customWinCondition: '',
@@ -283,140 +282,28 @@ export default function AddGamePage() {
         throw new Error('Please choose a win condition before saving');
       }
 
-      const participantRows: Array<{
-        seat: number;
-        playerId: string;
-        primaryCommanderId: string;
-        secondaryCommanderId: string | null;
-        isWinner: boolean;
-      }> = [];
+      await createGameWithParticipants({
+        playedAt: formData.playedAt,
+        playersCount: parseInt(formData.playersCount, 10),
+        bracket: parseInt(formData.bracket, 10),
+        service: formData.service,
+        turnLength: formData.turnLength ? parseInt(formData.turnLength, 10) : null,
+        winCondition: resolvedWinCondition,
+        notes: formData.gameNotes,
+        participants: participants.map((participant) => {
+          if (!participant.primary) {
+            throw new Error(`Seat ${participant.seat} is missing a commander`);
+          }
 
-      for (const participant of participants) {
-        if (!participant.primary) {
-          throw new Error(`Seat ${participant.seat} is missing a commander`);
-        }
-
-        const { data: commanderData, error: commanderError } = await supabase
-          .from('commanders')
-          .upsert(
-            {
-              scryfall_id: participant.primary.scryfallId,
-              name: participant.primary.name,
-              image_url: participant.primary.imageUrl,
-              color_identity: participant.primary.colorIdentity || [],
-              type_line: participant.primary.typeLine,
-              oracle_text: participant.primary.oracleText,
-            },
-            { onConflict: 'scryfall_id' },
-          )
-          .select()
-          .single();
-
-        if (commanderError) throw commanderError;
-
-        let secondaryCommanderId: string | null = null;
-
-        if (participant.secondary) {
-          const { data: secondaryCommanderData, error: secondaryCommanderError } = await supabase
-            .from('commanders')
-            .upsert(
-              {
-                scryfall_id: participant.secondary.scryfallId,
-                name: participant.secondary.name,
-                image_url: participant.secondary.imageUrl,
-                color_identity: participant.secondary.colorIdentity || [],
-                type_line: participant.secondary.typeLine,
-                oracle_text: participant.secondary.oracleText,
-              },
-              { onConflict: 'scryfall_id' },
-            )
-            .select()
-            .single();
-
-          if (secondaryCommanderError) throw secondaryCommanderError;
-          secondaryCommanderId = secondaryCommanderData.id;
-        }
-
-        const { data: playerData, error: playerError } = await supabase
-          .from('players')
-          .upsert(
-            {
-              name: participant.playerName.trim(),
-            },
-            { onConflict: 'name' },
-          )
-          .select()
-          .single();
-
-        if (playerError) throw playerError;
-
-        participantRows.push({
-          seat: participant.seat,
-          playerId: playerData.id,
-          primaryCommanderId: commanderData.id,
-          secondaryCommanderId,
-          isWinner: formData.finishedGame ? participant.isWinner || false : false,
-        });
-      }
-
-      let gameInsertResult = await supabase
-        .from('games')
-        .insert({
-          played_at: formData.playedAt,
-          number_of_players: parseInt(formData.playersCount, 10),
-          bracket: parseInt(formData.bracket, 10),
-          win_condition: resolvedWinCondition,
-          notes: formData.gameNotes.trim() || null,
-        })
-        .select()
-        .single();
-
-      if (gameInsertResult.error && isMissingBracketColumnError(gameInsertResult.error)) {
-        gameInsertResult = await supabase
-          .from('games')
-          .insert({
-            played_at: formData.playedAt,
-            number_of_players: parseInt(formData.playersCount, 10),
-            win_condition: resolvedWinCondition,
-            notes: formData.gameNotes.trim() || null,
-          })
-          .select()
-          .single();
-      }
-
-      if (gameInsertResult.error) throw gameInsertResult.error;
-      const gameData = gameInsertResult.data;
-
-      const insertedParticipants: Array<{
-        id: string;
-        turn_order_position: number;
-      }> = [];
-      const winnerSeat = participantRows.find((participant) => participant.isWinner)?.seat ?? null;
-
-      for (const participantRow of participantRows) {
-        const { data: insertedParticipant, error: participantError } = await supabase
-          .from('game_participants')
-          .insert({
-            game_id: gameData.id,
-            player_id: participantRow.playerId,
-            primary_commander_id: participantRow.primaryCommanderId,
-            secondary_commander_id: participantRow.secondaryCommanderId,
-            turn_order_position: participantRow.seat,
-            // The canonical winner assignment happens through set_game_winner after all seats exist.
-            is_winner: false,
-          })
-          .select('id, turn_order_position')
-          .single();
-
-        if (participantError) throw participantError;
-
-        insertedParticipants.push(insertedParticipant);
-      }
-
-      const winnerParticipant = winnerSeat
-        ? insertedParticipants.find((participant) => participant.turn_order_position === winnerSeat) ?? null
-        : null;
-      await setGameWinner(gameData.id, winnerParticipant?.id ?? null);
+          return {
+            seat: participant.seat,
+            playerName: participant.playerName,
+            primaryCommander: participant.primary,
+            secondaryCommander: participant.secondary ?? null,
+            isWinner: formData.finishedGame ? participant.isWinner || false : false,
+          };
+        }),
+      });
 
       navigate('/history');
     } catch (err) {
@@ -469,24 +356,43 @@ export default function AddGamePage() {
           </label>
 
           {finishedGame && (
-            <select
-              className='app-input h-14 text-base md:text-lg sm:col-span-2 lg:col-span-4'
-              {...register('winCondition', {
-                onChange: (event) => {
-                  if (event.target.value !== CUSTOM_WIN_CONDITION_VALUE) {
-                    setValue('customWinCondition', '');
-                  }
-                },
-              })}
-            >
-              <option value=''>Select win condition</option>
-              {availableWinConditions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-              <option value={CUSTOM_WIN_CONDITION_VALUE}>Add new win condition</option>
-            </select>
+            <div className='grid gap-3 sm:col-span-2 lg:col-span-4 lg:grid-cols-3'>
+              <select className='app-input h-14 text-base md:text-lg' {...register('service', { required: true })}>
+                {SERVICE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+
+              <select className='app-input h-14 text-base md:text-lg' {...register('turnLength')}>
+                <option value=''>Turn length</option>
+                {TURN_LENGTH_OPTIONS.map((option) => (
+                  <option key={option} value={String(option)}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className='app-input h-14 text-base md:text-lg'
+                {...register('winCondition', {
+                  onChange: (event) => {
+                    if (event.target.value !== CUSTOM_WIN_CONDITION_VALUE) {
+                      setValue('customWinCondition', '');
+                    }
+                  },
+                })}
+              >
+                <option value=''>Select win condition</option>
+                {availableWinConditions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+                <option value={CUSTOM_WIN_CONDITION_VALUE}>Add new win condition</option>
+              </select>
+            </div>
           )}
 
           {isAddingCustomWinCondition && (

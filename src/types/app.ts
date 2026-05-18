@@ -1,3 +1,3 @@
 export type CommanderCard = { scryfallId: string; name: string; imageUrl?: string; colorIdentity?: string[]; typeLine?: string; oracleText?: string };
 export type ParticipantInput = { seat: number; playerName: string; primary: CommanderCard | null; secondary?: CommanderCard | null; isWinner?: boolean };
-export type GameRecord = { id: string; playedAt: string; durationMinutes?: number | null; playersCount: number; bracket: number; winCondition: string; notes?: string; participants: ParticipantInput[] };
+export type GameRecord = { id: string; playedAt: string; durationMinutes?: number | null; turnLength?: number | null; playersCount: number; bracket: number; service: 'paper' | 'Convoke' | 'Spelltable'; winCondition: string; notes?: string; participants: ParticipantInput[] };

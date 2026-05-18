@@ -1,6 +1,8 @@
 import { supabase } from './supabase';
 import type { CommanderCard } from '../types/app';
 
+export type GameService = 'paper' | 'Convoke' | 'Spelltable';
+
 export type HistoryGameParticipant = {
   id: string;
   turn_order_position: number;
@@ -16,6 +18,8 @@ export type HistoryGame = {
   created_at: string;
   number_of_players: number;
   bracket: number;
+  service: GameService;
+  turn_length: number | null;
   win_condition: string;
   notes: string | null;
   game_participants: HistoryGameParticipant[];
@@ -68,6 +72,14 @@ export type AddGamePlayerSuggestion = {
       appearances: number;
     }
   >;
+};
+
+export type CreateGameParticipantPayload = {
+  seat: number;
+  playerName: string;
+  primaryCommander: CommanderCard;
+  secondaryCommander: CommanderCard | null;
+  isWinner: boolean;
 };
 
 export async function fetchWinConditionSuggestions() {
@@ -128,6 +140,8 @@ export async function fetchNumberedGames() {
       created_at,
       number_of_players,
       bracket,
+      service,
+      turn_length,
       win_condition,
       notes,
       game_participants!game_participants_game_id_fkey (
@@ -164,6 +178,8 @@ export async function fetchNumberedGames() {
           played_at,
           created_at,
           number_of_players,
+          service,
+          turn_length,
           win_condition,
           notes,
           game_participants!game_participants_game_id_fkey (
@@ -194,6 +210,8 @@ export async function fetchNumberedGames() {
       const fallbackGames = ((fallbackResult.data as Omit<HistoryGame, 'bracket'>[] | null) ?? []).map((game) => ({
         ...game,
         bracket: 3,
+        service: 'Convoke' as GameService,
+        turn_length: null,
       }));
 
       return toNumberedGames(fallbackGames);
@@ -424,6 +442,56 @@ export async function setGameWinner(gameId: string, winnerParticipantId: string 
   if (error) {
     throw error;
   }
+}
+
+export async function createGameWithParticipants(input: {
+  playedAt: string;
+  playersCount: number;
+  bracket: number;
+  service: GameService;
+  turnLength: number | null;
+  winCondition: string;
+  notes: string;
+  participants: CreateGameParticipantPayload[];
+}) {
+  const { data, error } = await supabase.rpc('create_game_with_participants', {
+    p_played_at: input.playedAt,
+    p_number_of_players: input.playersCount,
+    p_bracket: input.bracket,
+    p_service: input.service,
+    p_turn_length: input.turnLength,
+    p_win_condition: input.winCondition,
+    p_notes: input.notes,
+    p_participants: input.participants.map((participant) => ({
+      seat: participant.seat,
+      player_name: participant.playerName.trim(),
+      is_winner: participant.isWinner,
+      primary_commander: {
+        scryfall_id: participant.primaryCommander.scryfallId,
+        name: participant.primaryCommander.name,
+        image_url: participant.primaryCommander.imageUrl ?? null,
+        color_identity: participant.primaryCommander.colorIdentity ?? [],
+        type_line: participant.primaryCommander.typeLine ?? null,
+        oracle_text: participant.primaryCommander.oracleText ?? null,
+      },
+      secondary_commander: participant.secondaryCommander
+        ? {
+            scryfall_id: participant.secondaryCommander.scryfallId,
+            name: participant.secondaryCommander.name,
+            image_url: participant.secondaryCommander.imageUrl ?? null,
+            color_identity: participant.secondaryCommander.colorIdentity ?? [],
+            type_line: participant.secondaryCommander.typeLine ?? null,
+            oracle_text: participant.secondaryCommander.oracleText ?? null,
+          }
+        : null,
+    })),
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
 }
 
 export function readSingleName(value: { name: string } | { name: string }[] | null) {

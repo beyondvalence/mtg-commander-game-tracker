@@ -6,7 +6,7 @@
 - Navigation now uses a compact horizontal top bar with a branded `PodTracker` logo, a highlighted `Add Game` nav action, and a theme button on the right.
 - The main active pages are Dashboard, Add Game, Game History, and Players.
 - Dashboard now surfaces compact live stat cards, a top-row `Add Game` tile, and clickable recent-game rows with compact metadata, seat-order summaries, and winner badges.
-- Add Game supports optional unfinished games, reusable win-condition suggestions, case-sensitive player-name autocomplete matching, player-specific commander suggestions, partner/background-style secondary commanders, centered commander art, one-at-a-time partner/background carousel controls, and a collapsed-by-default notes section behind a caret toggle.
+- Add Game supports optional unfinished games, reusable win-condition suggestions, case-sensitive player-name autocomplete matching, player-specific commander suggestions, partner/background-style secondary commanders, centered commander art, one-at-a-time partner/background carousel controls, a collapsed-by-default notes section behind a caret toggle, and finished-game-only `service` plus `turn length` selectors.
 - Game History supports inline game editing for bracket, win condition, notes, and winner selection, with winner changes applied through the shared `set_game_winner` database function, plus seat-card art alignment that stays visually consistent when some players have two commanders and case-sensitive player filtering.
 - Players renders live player tiles plus summary stat cards derived from saved history, along with URL-backed, case-sensitive filtering.
 
@@ -21,7 +21,10 @@
 - Made Add Game support unfinished games by hiding winner and win-condition requirements until `Finished game` is enabled.
 - Reworked Add Game seat-card layouts to emphasize larger commander art, with arrow-based horizontal cycling for two-card commander setups.
 - Added a labeled `Game Notes` panel with a 500-character limit, live character count, and shared styling between Add Game and History, then made Add Game notes collapsed by default with a caret toggle.
-- Updated Add Game save flow so winner assignment happens through the shared `set_game_winner` RPC after all participant rows are created.
+- Replaced Add Game’s multi-step client save flow with a single transactional `create_game_with_participants` RPC that upserts players and commanders, inserts the game and seats, and then finalizes winner assignment server-side through `set_game_winner`.
+- Applied the `create_game_with_participants` RPC to the linked live Supabase project through the Supabase CLI and recorded the migration in remote history.
+- Added `service` and `turn_length` game fields end to end across Add Game, shared reads, and the transactional RPC, with `service` defaulting to `Convoke` and both controls only shown for finished games.
+- Applied the live Supabase schema update for `games.service` and `games.turn_length`, updated the RPC signature on the linked project, and backfilled existing saved games to `Convoke` plus turn length `9`.
 - Expanded Game History editing so one `Edit game` flow now updates bracket, win condition, notes, and winner state together.
 - Reworked History tile headers so `Game #` sits on its own line, metadata and inline edit controls sit beneath it, and winner state and edit/save actions remain compact on the right.
 - Replaced the History winner dropdown interaction with per-seat winner buttons inside each seat card while editing.
@@ -36,13 +39,13 @@
 ## Key Files
 
 - `src/pages/AddGamePage.tsx`
-  Add Game form state, finished-game toggle behavior, case-sensitive player suggestions, commander selection, seat-card art carousel behavior, collapsible notes capture, and save flow.
+  Add Game form state, finished-game toggle behavior, case-sensitive player suggestions, commander selection, seat-card art carousel behavior, collapsible notes capture, `service` and `turn length` selectors, and save flow.
 - `src/pages/GameHistoryPage.tsx`
-  Filtered history list, inline edit mode for bracket/win condition/notes, split game-card headers, case-sensitive player filtering, seat-card winner selection, art alignment spacing, player-to-Players navigation, and Scryfall links.
+  Filtered history list, inline edit mode for bracket/win condition/notes, split game-card headers, service/turn-length metadata display, case-sensitive player filtering, seat-card winner selection, art alignment spacing, player-to-Players navigation, and Scryfall links.
 - `src/pages/PlayersPage.tsx`
   Player summary cards, URL-backed case-sensitive player/commander filtering, player-to-history navigation, and commander-link rendering.
 - `src/lib/gameRecords.ts`
-  Shared reads for dashboard/history/player summaries plus the `setGameWinner` RPC wrapper.
+  Shared reads for dashboard/history/player summaries plus the `setGameWinner` and `createGameWithParticipants` RPC wrappers, including `service` and `turn_length` support.
 - `src/pages/DashboardPage.tsx`
   Compact home-page stat cards, top-row `Add Game` tile, and recent-game summaries with seat-order and winner context.
 - `src/lib/scryfall.ts`
@@ -52,7 +55,11 @@
 - `src/index.css`
   App-wide layout plus the shared visual language for Dashboard, Add Game, History, Players, commander art stages, and notes panels.
 - `schema.sql`
-  Current schema plus the corrected `set_game_winner` function, stricter winner consistency enforcement, and participant-count sync triggers.
+  Current schema plus the corrected `set_game_winner` function, the transactional `create_game_with_participants` RPC, `games.service` and `games.turn_length`, stricter winner consistency enforcement, and participant-count sync triggers.
+- `supabase/create_game_with_participants_patch.sql`
+  Patch file for applying the transactional Add Game RPC to the live Supabase project.
+- `supabase/migrations/20260518032500_add_game_service_and_turn_length.sql`
+  Migration for the `service` and `turn_length` game fields plus the updated live RPC signature and existing-game backfill.
 - `supabase/review_consistency_patch.sql`
   Applied live-database patch for winner consistency enforcement, `number_of_players` sync, and one-time backfill of existing inconsistencies.
 
@@ -81,6 +88,17 @@
   - `games.winner_player_id`
   - `game_participants.is_winner`
 - The live `set_game_winner` function was patched during this session and revalidated successfully after the fix.
+- Live Supabase CLI validation confirmed:
+  - `public.create_game_with_participants(...)` exists on the linked project
+  - `anon` and `authenticated` both have `EXECUTE` on the function
+  - remote migration `20260518030151` is recorded as applied
+- Live Supabase validation for the new game fields confirmed:
+  - `games.service` exists as `text`
+  - `games.turn_length` exists as `integer`
+  - `public.create_game_with_participants(...)` now includes `p_service` and `p_turn_length`
+  - all 8 saved games were backfilled to `service = 'Convoke'`
+  - all 8 saved games were backfilled to `turn_length = 9`
+  - no saved games remain with null `service` or null `turn_length`
 - Live Supabase validation after the consistency patch confirmed:
   - the trigger `trg_sync_game_participant_count` exists
   - winner inconsistency count is `0`
@@ -89,7 +107,6 @@
 ## Known Caveats
 
 - The app still uses broad public Supabase access with permissive RLS for this no-login setup.
-- Game creation still happens as multiple client-side writes rather than a single transactional RPC.
 - Player identity is still case-sensitive at the database level by design, so differently cased names remain distinct players.
 - Players summary cards currently derive their metrics client-side from full history reads, which will eventually become a scaling bottleneck.
 - History and Players filters are URL-backed client filters rather than server-side filtered queries.
@@ -97,9 +114,6 @@
 
 ## TODO Notes
 
-- Convert Add Game creation into a single transactional database function or RPC.
-- Add a game-service field or selector for `paper`, `Convoke`, or `Spelltable`.
-- Add a turn-length field.
 - Add a first-kill field or selector.
 - Add a died-alone selector.
 - Consider pushing player and commander summary aggregation into SQL for better performance at larger data volumes.

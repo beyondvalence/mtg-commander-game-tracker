@@ -6,3 +6,4 @@ tsconfig.tsbuildinfo
 supabase/.temp
 .agents/
 skills-lock.json
+src/mtg-commander-game-tracker.code-workspace

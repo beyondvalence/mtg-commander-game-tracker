@@ -48,6 +48,7 @@
 - Performed a code review of the aggregation changes, fixed the full-history participant query scaling issue, and ran build/test validation.
 - Ran Supabase advisors, found existing mutable function `search_path` warnings, added and applied a function-hardening migration, and later confirmed the linked-project advisor rerun succeeds after the temporary auth/circuit-breaker failure cleared.
 - Reviewed SQL files under `/supabase`: files in `supabase/migrations/` are canonical applied-once migration history; historical single-use patch artifacts now live in `supabase/archive/`.
+- Removed the duplicate `upstream` Git remote after confirming it pointed at the same repository and commit as `origin`; `main` now tracks `origin/main`.
 
 ## Key Files
 
@@ -148,3 +149,4 @@
 
 - `.agents/`
 - `skills-lock.json`
+- `src/mtg-commander-game-tracker.code-workspace`

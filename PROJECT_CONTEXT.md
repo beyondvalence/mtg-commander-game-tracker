@@ -39,14 +39,15 @@
 - Hardened existing public functions by pinning their `search_path` after Supabase advisors flagged mutable function search paths.
 - Reviewed the `/supabase` SQL files and classified migration files as applied-once history, while identifying loose patch scripts as historical single-use artifacts rather than recurring maintenance scripts.
 - Reviewed the summary-view implementation and fixed the History participant fetch so full-history reads no longer build a giant `IN (...)` list of every game ID; limited Dashboard reads still scope participants to the three recent games.
+- Archived historical single-use SQL patch artifacts under `supabase/archive/` and confirmed linked-project Supabase advisors now complete after the prior temporary auth/circuit-breaker failure.
 
 ## Current Session Summary
 
 - Used the Supabase workflow to move player, commander, dashboard, and game-number aggregation into SQL-backed views.
 - Applied the summary-view migration to the linked Supabase project and validated the live view outputs.
 - Performed a code review of the aggregation changes, fixed the full-history participant query scaling issue, and ran build/test validation.
-- Ran Supabase advisors, found existing mutable function `search_path` warnings, added and applied a function-hardening migration, and recorded that the follow-up advisor rerun was blocked by temporary Supabase auth/circuit-breaker failures.
-- Reviewed SQL files under `/supabase`: files in `supabase/migrations/` are canonical applied-once migration history; `supabase/create_game_with_participants_patch.sql` and `supabase/review_consistency_patch.sql` are single-use patch artifacts kept only for historical reference unless archived or removed.
+- Ran Supabase advisors, found existing mutable function `search_path` warnings, added and applied a function-hardening migration, and later confirmed the linked-project advisor rerun succeeds after the temporary auth/circuit-breaker failure cleared.
+- Reviewed SQL files under `/supabase`: files in `supabase/migrations/` are canonical applied-once migration history; historical single-use patch artifacts now live in `supabase/archive/`.
 
 ## Key Files
 
@@ -70,9 +71,9 @@
   Current schema plus the corrected `set_game_winner` function, the transactional `create_game_with_participants` RPC, `games.service` and `games.turn_length`, stricter winner consistency enforcement, participant-count sync triggers, and SQL summary views.
 - `supabase/migrations/20260518032500_add_game_service_and_turn_length.sql`
   Migration for the `service` and `turn_length` game fields plus the updated live RPC signature and existing-game backfill.
-- `supabase/review_consistency_patch.sql`
+- `supabase/archive/review_consistency_patch.sql`
   Historical single-use live-database patch for winner consistency enforcement, `number_of_players` sync, and one-time backfill of existing inconsistencies; not meant for regular reuse.
-- `supabase/create_game_with_participants_patch.sql`
+- `supabase/archive/create_game_with_participants_patch.sql`
   Historical single-use patch script for the transactional Add Game RPC and related `service`/`turn_length` fields; now redundant with canonical migrations and `schema.sql`.
 - `supabase/migrations/20260518184620_add_summary_aggregation_views.sql`
   Migration for `numbered_games`, `dashboard_summary`, `commander_summary_entries`, `player_directory_entries`, and `player_page_summary` views.
@@ -126,7 +127,9 @@
   - `player_page_summary` returns `21` history-backed players, `20` history-backed commanders, and `8` wins
 - Live Supabase validation after function hardening confirmed:
   - remote migration `20260518190426` is recorded as applied
-  - a follow-up advisor rerun was blocked by Supabase temp-role authentication failures and a temporary circuit breaker
+  - a follow-up linked-project advisor rerun now completes successfully
+  - warning-level/security advisor output contains only the intentional permissive no-login RLS policy warnings
+  - info-level advisor output also reports optional performance work for unindexed foreign keys on `games` and `game_participants`
 
 ## Known Caveats
 
@@ -139,10 +142,7 @@
 
 - Add a first-kill field or selector.
 - Add a died-alone selector.
-- Decide whether to archive or delete historical single-use SQL patch files:
-  - `supabase/create_game_with_participants_patch.sql`
-  - `supabase/review_consistency_patch.sql`
-- Rerun Supabase advisors later after the temporary linked-project auth/circuit-breaker issue clears, and confirm only the intentional permissive no-login RLS warnings remain.
+- Consider adding indexes for the advisor-reported unindexed foreign keys on `games` and `game_participants`.
 
 ## Ignored Local Files
 

@@ -102,6 +102,19 @@ body {
     color: #dcfce7;
   }
 
+  .podtracker-logo-auth {
+    @apply gap-4 px-0;
+  }
+
+  .podtracker-logo-auth .podtracker-logo-mark {
+    @apply h-16;
+  }
+
+  .podtracker-logo-auth .podtracker-logo-wordmark {
+    font-size: clamp(1.35rem, 4vw, 1.85rem);
+    letter-spacing: 0.14em;
+  }
+
   .app-card {
     @apply rounded-xl border p-4;
     background: var(--app-panel);
@@ -453,6 +466,97 @@ body {
 
   .theme-toggle-button:hover {
     background: var(--app-hover);
+  }
+
+  .logout-button {
+    @apply rounded-2xl border px-3 py-2 text-sm font-semibold transition;
+    background: var(--app-panel);
+    border-color: var(--app-border);
+    color: var(--app-muted);
+    white-space: nowrap;
+  }
+
+  .logout-button:hover:not(:disabled) {
+    background: var(--app-hover);
+    color: var(--app-text);
+  }
+
+  .logout-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+
+  .auth-shell {
+    @apply flex flex-col gap-6;
+  }
+
+  .auth-eyebrow {
+    @apply text-sm font-bold uppercase tracking-[0.22em];
+    color: #047857;
+  }
+
+  .auth-page-title {
+    @apply text-3xl font-black tracking-tight md:text-4xl;
+  }
+
+  html[data-theme='dark'] .auth-eyebrow {
+    color: #86efac;
+  }
+
+  .auth-copy {
+    @apply text-lg leading-relaxed;
+    color: var(--app-muted);
+  }
+
+  .auth-form {
+    @apply flex flex-col gap-4;
+  }
+
+  .auth-field {
+    @apply flex flex-col gap-2 text-left text-sm font-bold uppercase tracking-[0.14em];
+    color: var(--app-muted);
+  }
+
+  .auth-message {
+    @apply rounded-xl border px-4 py-3 text-sm font-semibold;
+    border-color: rgba(34, 197, 94, 0.35);
+    background: rgba(34, 197, 94, 0.1);
+    color: #047857;
+  }
+
+  html[data-theme='dark'] .auth-message {
+    color: #bbf7d0;
+  }
+
+  .auth-error {
+    @apply rounded-xl border px-4 py-3 text-sm font-semibold;
+    border-color: rgba(220, 38, 38, 0.35);
+    background: rgba(220, 38, 38, 0.1);
+    color: #b91c1c;
+  }
+
+  html[data-theme='dark'] .auth-error {
+    color: #fecaca;
+  }
+
+  .auth-submit {
+    @apply w-full justify-center disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .auth-actions {
+    @apply flex flex-wrap items-center gap-3 text-sm font-semibold;
+    color: var(--app-muted);
+  }
+
+  .auth-actions button {
+    @apply rounded-full border px-4 py-2 transition;
+    background: var(--app-panel);
+    border-color: var(--app-border);
+  }
+
+  .auth-actions button:hover {
+    background: var(--app-hover);
+    color: var(--app-text);
   }
 
   .theme-option {

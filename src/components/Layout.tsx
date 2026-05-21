@@ -1,46 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-
-const THEME_STORAGE_KEY = 'mtg-commander-theme';
-
-type ThemeMode = 'light' | 'dark';
+import { useAuth } from '../lib/auth';
+import { applyTheme, resolveInitialTheme, THEME_STORAGE_KEY, type ThemeMode } from '../lib/theme';
+import { PodTrackerLogo } from './PodTrackerLogo';
 
 const links = [
   { to: '/', label: 'Home' },
   { to: '/add-game', label: 'Add Game' },
   { to: '/history', label: 'History' },
-  { to: '/players', label: 'Players' },
+  { to: '/players', label: 'Pod' },
 ];
-
-function PodTrackerLogo() {
-  return (
-    <div className='podtracker-logo' aria-label='PodTracker home'>
-      <svg viewBox='0 0 140 64' className='podtracker-logo-mark' role='img' aria-hidden='true'>
-        <defs>
-          <linearGradient id='podtracker-core' x1='0%' y1='0%' x2='100%' y2='100%'>
-            <stop offset='0%' stopColor='#9bfda7' />
-            <stop offset='55%' stopColor='#34d399' />
-            <stop offset='100%' stopColor='#0f172a' />
-          </linearGradient>
-          <linearGradient id='podtracker-grid' x1='0%' y1='0%' x2='100%' y2='0%'>
-            <stop offset='0%' stopColor='#22c55e' stopOpacity='0.15' />
-            <stop offset='50%' stopColor='#86efac' stopOpacity='0.85' />
-            <stop offset='100%' stopColor='#22c55e' stopOpacity='0.15' />
-          </linearGradient>
-        </defs>
-        <rect x='2' y='6' width='136' height='52' rx='20' fill='#05070a' stroke='#1f2937' strokeWidth='2' />
-        <path d='M14 46 38 18h20L34 46Z' fill='url(#podtracker-core)' />
-        <path d='M46 46 70 18h20L66 46Z' fill='url(#podtracker-core)' opacity='0.92' />
-        <path d='M78 46 102 18h24L102 46Z' fill='url(#podtracker-core)' opacity='0.84' />
-        <path d='M18 52h104' stroke='url(#podtracker-grid)' strokeWidth='2.2' strokeLinecap='round' />
-        <path d='M28 12h68' stroke='#86efac' strokeOpacity='0.55' strokeWidth='1.6' strokeLinecap='round' />
-        <circle cx='114' cy='24' r='5' fill='#86efac' fillOpacity='0.95' />
-        <circle cx='114' cy='24' r='10' fill='none' stroke='#22c55e' strokeOpacity='0.4' strokeWidth='1.5' />
-      </svg>
-      <span className='podtracker-logo-wordmark'>PodTracker</span>
-    </div>
-  );
-}
 
 function AddGameNavLabel() {
   return (
@@ -51,19 +20,6 @@ function AddGameNavLabel() {
       <span>Add Game</span>
     </span>
   );
-}
-
-function applyTheme(theme: ThemeMode) {
-  document.documentElement.setAttribute('data-theme', theme);
-}
-
-function resolveInitialTheme(): ThemeMode {
-  const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-  if (savedTheme === 'light' || savedTheme === 'dark') {
-    return savedTheme;
-  }
-
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function ThemeIcon({ theme }: { theme: ThemeMode }) {
@@ -84,9 +40,11 @@ function ThemeIcon({ theme }: { theme: ThemeMode }) {
 }
 
 export function Layout() {
+  const { signOut, user } = useAuth();
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     const initialTheme = resolveInitialTheme();
@@ -120,6 +78,15 @@ export function Layout() {
 
   const themeLabel = useMemo(() => (theme === 'dark' ? 'Dark mode' : 'Light mode'), [theme]);
 
+  const handleSignOut = async () => {
+    try {
+      setIsSigningOut(true);
+      await signOut();
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
+
   return (
     <div className='mx-auto flex min-h-screen w-full max-w-[1550px] flex-col gap-4 px-4 py-4 md:px-6 md:py-6'>
       <header className='app-topbar' data-theme-menu-root>
@@ -143,7 +110,14 @@ export function Layout() {
           </nav>
         </div>
 
-        <div className='relative ml-auto'>
+        <div className='ml-auto flex items-center gap-2'>
+          {user?.email && <span className='hidden max-w-[14rem] truncate text-sm font-medium app-muted lg:inline'>{user.email}</span>}
+          <button type='button' className='logout-button' onClick={handleSignOut} disabled={isSigningOut}>
+            {isSigningOut ? 'Signing out' : 'Logout'}
+          </button>
+        </div>
+
+        <div className='relative'>
           <button
             type='button'
             className='theme-toggle-button'

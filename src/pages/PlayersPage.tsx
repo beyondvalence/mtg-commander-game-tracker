@@ -100,7 +100,7 @@ export default function PlayersPage() {
   return (
     <section className='wireframe-shell space-y-6'>
       <div className='text-left'>
-        <h1 className='wireframe-title'>Players</h1>
+        <h1 className='wireframe-title'>Pod Stats</h1>
       </div>
 
       <div className='space-y-4'>

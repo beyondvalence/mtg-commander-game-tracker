@@ -10,4 +10,10 @@ if (!url || !key) {
 }
 
 // Create client even with missing vars to prevent app from crashing
-export const supabase = createClient(url || 'https://placeholder.supabase.co', key || 'placeholder-key');
+export const supabase = createClient(url || 'https://placeholder.supabase.co', key || 'placeholder-key', {
+  auth: {
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    persistSession: true,
+  },
+});

@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 type AuthContextValue = {
   isLoading: boolean;
   session: Session | null;
+  signInWithGoogle: (redirectTo: string) => Promise<void>;
   user: User | null;
   signOut: () => Promise<void>;
 };
@@ -42,6 +43,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       isLoading,
       session,
+      async signInWithGoogle(redirectTo: string) {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo,
+          },
+        });
+
+        if (error) {
+          throw error;
+        }
+      },
       user: session?.user ?? null,
       async signOut() {
         const { error } = await supabase.auth.signOut();

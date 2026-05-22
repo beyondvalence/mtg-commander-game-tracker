@@ -4,6 +4,7 @@
 
 - The app is an owner-only authenticated MTG Commander tracker backed directly by a live Supabase project.
 - Supabase Auth email/password is enabled in-app with sign in, sign up, password reset, persistent browser sessions, protected routes, and logout.
+- Google OAuth sign-in is implemented in the app UI and documented in `spec/spec-v0.3-google.md`, but still requires Google Cloud and Supabase Dashboard provider configuration before the live round-trip can complete.
 - Navigation now uses a compact horizontal top bar with a reusable branded `PodTracker` logo, a highlighted `Add Game` nav action, a `Pod` nav link for pod/player stats, logout, and a theme button on the right.
 - The main active pages are Login, Dashboard, Add Game, Game History, and Pod Stats.
 - Dashboard now surfaces compact live stat cards, a top-row `Add Game` tile, and clickable recent-game rows with compact metadata, seat-order summaries, and winner badges.
@@ -45,17 +46,17 @@
 - Added owner-backed RLS migrations that create `profiles`, add required `user_id` columns to app data tables, backfill existing rows to owner UUID `673b2a37-1799-4fcc-9dd2-d6598d36ee4b`, replace permissive policies with `to authenticated` owner policies, update game RPCs to require `auth.uid()`, and remove inherited anonymous function execution.
 - Applied the auth/RLS migrations to the linked Supabase project and verified anonymous users no longer have public schema, table, or game RPC access while authenticated users retain the required app access.
 - Shared the PodTracker logo between the app shell and auth page, made `/login` respect the same persisted dark/light theme as the home page, renamed the `Players` nav link to `Pod`, and changed the Players page title to `Pod Stats`.
+- Added the v0.3 Google sign-in spec and implemented the `/login` Google OAuth button using Supabase `signInWithOAuth`, while preserving existing email/password sign-in, signup, forgot-password, and reset-password flows.
 
 ## Current Session Summary
 
-- Implemented the v0.2 auth start: `AuthProvider`, `ProtectedRoute`, real `/login`, app-session persistence, logout, and reusable theme/logo helpers.
-- Created and applied live migrations `20260521014852_add_owner_auth_rls.sql` and `20260521020358_revoke_public_function_access.sql`.
-- Verified the owner Auth row exists for `spacewolf13@gmail.com` with UUID `673b2a37-1799-4fcc-9dd2-d6598d36ee4b`.
-- Verified existing data was backfilled to the owner: 24 players, 26 commanders, 8 games, and 31 game participants, with zero null `user_id` rows.
-- Verified RLS is enabled on `profiles`, `players`, `commanders`, `games`, and `game_participants`.
-- Verified `anon` has no public schema usage, no `games` select privilege, and no game RPC execute privilege; `authenticated` still has required table/RPC access.
-- Ran linked Supabase security advisors; the remaining warning is Dashboard configuration only: leaked password protection is disabled.
-- Updated auth and navigation styling: the login/sign-up page now uses the larger inline PodTracker logo, preserves the persisted theme, and uses a smaller auth title; the `Players` nav/page naming is now `Pod` / `Pod Stats`.
+- Created `spec/spec-v0.3-google.md` with the Google OAuth plan, dashboard setup notes, account model, security boundaries, and test plan.
+- Added `signInWithGoogle(redirectTo)` to `src/lib/auth.tsx`, using Supabase `signInWithOAuth({ provider: 'google', options: { redirectTo } })`.
+- Added a `Continue with Google` action to `/login` for sign-in and sign-up modes, with separate OAuth loading state and immediate error handling.
+- Kept existing email/password sign-in, email/password signup, forgot-password, reset-password, protected routing, logout, and RLS behavior unchanged.
+- Added Google auth button/divider styling in `src/index.css`.
+- Verified `npm test -- --run` and `npm run build` pass.
+- Live Google sign-in still needs Google Cloud OAuth Client ID/Secret and Supabase Dashboard provider/redirect configuration before it can be manually validated.
 
 ## Key Files
 
@@ -66,9 +67,9 @@
 - `src/pages/PlayersPage.tsx`
   Pod Stats page title, player summary cards, URL-backed case-sensitive player/commander filtering, player-to-history navigation, and commander-link rendering.
 - `src/pages/LoginPage.tsx`
-  Supabase Auth UI for sign in, sign up, forgot-password email, reset-password update, persisted-theme application, and auth-page PodTracker branding.
+  Supabase Auth UI for Google OAuth, sign in, sign up, forgot-password email, reset-password update, persisted-theme application, and auth-page PodTracker branding.
 - `src/lib/auth.tsx`
-  Session provider built around `supabase.auth.getSession()` and `onAuthStateChange`, exposing current user/session/loading state plus sign out.
+  Session provider built around `supabase.auth.getSession()` and `onAuthStateChange`, exposing current user/session/loading state plus Google OAuth sign-in and sign out.
 - `src/components/ProtectedRoute.tsx`
   Route guard that blocks unauthenticated app access and redirects to `/login`.
 - `src/components/PodTrackerLogo.tsx`
@@ -101,6 +102,8 @@
   Owner-only auth/RLS migration that creates `profiles`, adds and backfills `user_id`, swaps table policies to authenticated owner checks, updates game RPCs to require `auth.uid()`, and revokes anonymous table/RPC access.
 - `supabase/migrations/20260521020358_revoke_public_function_access.sql`
   Follow-up grant hardening that removes inherited `PUBLIC` function execution and confirms only `authenticated` can execute app RPCs.
+- `spec/spec-v0.3-google.md`
+  Detailed plan for adding Google sign-in, including Supabase/Google Cloud setup, account model, security boundaries, and validation scenarios.
 
 ## Validation Status
 
@@ -160,17 +163,31 @@
   - `anon` has no public schema usage, no `games` SELECT, and no game RPC EXECUTE
   - `authenticated` has required game table and `create_game_with_participants` RPC access
   - linked security advisors report only leaked password protection disabled
+- v0.3 Google sign-in code validation confirmed:
+  - `npm test -- --run` passes
+  - `npm run build` passes
+  - live OAuth round-trip remains unverified until provider credentials and redirect URLs are configured
 
 ## Known Caveats
 
 - Supabase Auth leaked password protection is still disabled in Dashboard and should be enabled before real use.
 - Public signup exists in the UI; Dashboard Auth settings determine whether email confirmation is required and whether signup remains open.
+- Google sign-in UI is implemented, but Google Cloud OAuth and Supabase Dashboard Google provider configuration are not yet complete.
 - Player identity is still case-sensitive at the database level by design, so differently cased names remain distinct players.
 - History and Pod Stats filters are URL-backed client filters rather than server-side filtered queries.
 - The repo still contains `src/pages/CommandersPage.tsx`, but the route now redirects to home and the page is no longer exposed in navigation.
 
 ## TODO Notes
 
+- Finish Google sign-in setup:
+  - Create or choose a Google Cloud project and configure the OAuth consent screen/branding for PodTracker.
+  - Create a Google OAuth `Web application` client.
+  - Add Authorized JavaScript origins: `http://127.0.0.1:5173`, `http://localhost:5173`, and the future production domain.
+  - Add the Supabase Google provider callback URL as the Authorized redirect URI in Google Cloud.
+  - Enable the Google provider in Supabase Dashboard and add the Google Client ID and Client Secret.
+  - Add Supabase redirect allow-list entries for `http://127.0.0.1:5173/**`, `http://localhost:5173/**`, the future Vercel production URL, and Vercel preview wildcard if preview auth testing is needed.
+  - Manually test Google sign-in, logout, existing owner data access, new Google-user empty state, Add Game as a Google user, and RLS isolation.
+  - Run Supabase security advisors after provider configuration.
 - Add a first-kill field or selector.
 - Add a died-alone selector.
 - Consider adding indexes for the advisor-reported unindexed foreign keys on `games` and `game_participants`.

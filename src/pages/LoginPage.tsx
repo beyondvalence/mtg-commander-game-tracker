@@ -18,7 +18,7 @@ function getMode(value: string | null): LoginMode {
 }
 
 export default function LoginPage() {
-  const { isLoading, user } = useAuth();
+  const { isLoading, signInWithGoogle, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -27,6 +27,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOAuthSubmitting, setIsOAuthSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -131,12 +132,26 @@ export default function LoginPage() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setIsOAuthSubmitting(true);
+    setMessage(null);
+    setError(null);
+
+    try {
+      await signInWithGoogle(window.location.origin);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Google sign-in failed');
+      setIsOAuthSubmitting(false);
+    }
+  };
+
   const title = {
     'sign-in': 'Sign In',
     'sign-up': 'Create Account',
     forgot: 'Reset Password',
     reset: 'Choose New Password',
   }[mode];
+  const showGoogleSignIn = mode === 'sign-in' || mode === 'sign-up';
 
   return (
     <main className='mx-auto flex min-h-screen w-full max-w-[48rem] flex-col justify-center px-4 py-8'>
@@ -152,6 +167,26 @@ export default function LoginPage() {
         </div>
 
         <form className='auth-form' onSubmit={handleSubmit}>
+          {showGoogleSignIn && (
+            <div className='auth-oauth-section'>
+              <button
+                type='button'
+                className='auth-google-button'
+                disabled={isSubmitting || isOAuthSubmitting}
+                onClick={handleGoogleSignIn}
+              >
+                <span className='auth-google-mark' aria-hidden='true'>
+                  G
+                </span>
+                <span>{isOAuthSubmitting ? 'Opening Google...' : 'Continue with Google'}</span>
+              </button>
+
+              <div className='auth-divider'>
+                <span>or continue with email</span>
+              </div>
+            </div>
+          )}
+
           {mode !== 'reset' && (
             <label className='auth-field'>
               <span>Email</span>
@@ -199,7 +234,7 @@ export default function LoginPage() {
           {message && <p className='auth-message'>{message}</p>}
           {error && <p className='auth-error'>{error}</p>}
 
-          <button type='submit' className='dashboard-save-button auth-submit' disabled={isSubmitting}>
+          <button type='submit' className='dashboard-save-button auth-submit' disabled={isSubmitting || isOAuthSubmitting}>
             {isSubmitting ? 'Working...' : title}
           </button>
         </form>

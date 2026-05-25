@@ -4,7 +4,7 @@
 
 - The app is an owner-only authenticated MTG Commander tracker backed directly by a live Supabase project.
 - Supabase Auth email/password is enabled in-app with sign in, sign up, password reset, persistent browser sessions, protected routes, and logout.
-- Google OAuth sign-in is implemented in the app UI and documented in `spec/spec-v0.3-google.md`, but still requires Google Cloud and Supabase Dashboard provider configuration before the live round-trip can complete.
+- Google OAuth sign-in is fully operational end-to-end: UI, Google Cloud OAuth client, and Supabase Dashboard provider are all configured and validated.
 - Navigation now uses a compact horizontal top bar with a reusable branded `PodTracker` logo, a highlighted `Add Game` nav action, a `Pod` nav link for pod/player stats, logout, and a theme button on the right.
 - The main active pages are Login, Dashboard, Add Game, Game History, and Pod Stats.
 - Dashboard now surfaces compact live stat cards, a top-row `Add Game` tile, and clickable recent-game rows with compact metadata, seat-order summaries, and winner badges.
@@ -47,6 +47,7 @@
 - Applied the auth/RLS migrations to the linked Supabase project and verified anonymous users no longer have public schema, table, or game RPC access while authenticated users retain the required app access.
 - Shared the PodTracker logo between the app shell and auth page, made `/login` respect the same persisted dark/light theme as the home page, renamed the `Players` nav link to `Pod`, and changed the Players page title to `Pod Stats`.
 - Added the v0.3 Google sign-in spec and implemented the `/login` Google OAuth button using Supabase `signInWithOAuth`, while preserving existing email/password sign-in, signup, forgot-password, and reset-password flows.
+- Completed Google OAuth provider setup: configured Google Cloud OAuth consent screen and Web application client, added authorized JavaScript origins and Supabase callback redirect URI, enabled Google provider in Supabase Dashboard with Client ID and Secret, added Supabase redirect allow-list entries for local dev and production, and validated the full live sign-in round-trip.
 
 ## Current Session Summary
 
@@ -56,7 +57,11 @@
 - Kept existing email/password sign-in, email/password signup, forgot-password, reset-password, protected routing, logout, and RLS behavior unchanged.
 - Added Google auth button/divider styling in `src/index.css`.
 - Verified `npm test -- --run` and `npm run build` pass.
-- Live Google sign-in still needs Google Cloud OAuth Client ID/Secret and Supabase Dashboard provider/redirect configuration before it can be manually validated.
+- Configured Google Cloud OAuth consent screen and Web application client for PodTracker.
+- Added authorized JavaScript origins (`http://127.0.0.1:5173`, `http://localhost:5173`, production domain) and Supabase callback URL as authorized redirect URI in Google Cloud.
+- Enabled Google provider in Supabase Dashboard with Client ID and Client Secret.
+- Added Supabase redirect allow-list entries for local dev origins and production.
+- Validated live Google sign-in round-trip end-to-end.
 
 ## Key Files
 
@@ -163,31 +168,26 @@
   - `anon` has no public schema usage, no `games` SELECT, and no game RPC EXECUTE
   - `authenticated` has required game table and `create_game_with_participants` RPC access
   - linked security advisors report only leaked password protection disabled
-- v0.3 Google sign-in code validation confirmed:
+- v0.3 Google sign-in validation confirmed:
   - `npm test -- --run` passes
   - `npm run build` passes
-  - live OAuth round-trip remains unverified until provider credentials and redirect URLs are configured
+  - Google Cloud OAuth client configured with correct origins and redirect URI
+  - Supabase Dashboard Google provider enabled with Client ID and Secret
+  - Supabase redirect allow-list covers local dev and production
+  - live Google sign-in round-trip validated end-to-end
 
 ## Known Caveats
 
 - Supabase Auth leaked password protection is still disabled in Dashboard and should be enabled before real use.
 - Public signup exists in the UI; Dashboard Auth settings determine whether email confirmation is required and whether signup remains open.
-- Google sign-in UI is implemented, but Google Cloud OAuth and Supabase Dashboard Google provider configuration are not yet complete.
+- Google sign-in is fully configured and live; the only remaining security hardening is enabling Supabase Auth leaked password protection.
 - Player identity is still case-sensitive at the database level by design, so differently cased names remain distinct players.
 - History and Pod Stats filters are URL-backed client filters rather than server-side filtered queries.
 - The repo still contains `src/pages/CommandersPage.tsx`, but the route now redirects to home and the page is no longer exposed in navigation.
 
 ## TODO Notes
 
-- Finish Google sign-in setup:
-  - Create or choose a Google Cloud project and configure the OAuth consent screen/branding for PodTracker.
-  - Create a Google OAuth `Web application` client.
-  - Add Authorized JavaScript origins: `http://127.0.0.1:5173`, `http://localhost:5173`, and the future production domain.
-  - Add the Supabase Google provider callback URL as the Authorized redirect URI in Google Cloud.
-  - Enable the Google provider in Supabase Dashboard and add the Google Client ID and Client Secret.
-  - Add Supabase redirect allow-list entries for `http://127.0.0.1:5173/**`, `http://localhost:5173/**`, the future Vercel production URL, and Vercel preview wildcard if preview auth testing is needed.
-  - Manually test Google sign-in, logout, existing owner data access, new Google-user empty state, Add Game as a Google user, and RLS isolation.
-  - Run Supabase security advisors after provider configuration.
+- Enable Supabase Auth leaked password protection in Dashboard.
 - Add a first-kill field or selector.
 - Add a died-alone selector.
 - Consider adding indexes for the advisor-reported unindexed foreign keys on `games` and `game_participants`.

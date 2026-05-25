@@ -173,6 +173,14 @@ export default function AddGamePage() {
     };
   }, []);
 
+  const incompleteFields: string[] = [];
+  for (const participant of participants) {
+    if (!participant.playerName.trim()) incompleteFields.push(`Seat ${participant.seat}: player name`);
+    if (!participant.primary) incompleteFields.push(`Seat ${participant.seat}: commander`);
+  }
+  if (finishedGame && !winCondition) incompleteFields.push('Win condition');
+  if (isAddingCustomWinCondition && !customWinCondition.trim()) incompleteFields.push('Custom win condition text');
+
   const hasIncompleteSeat = participants.some((participant) => !participant.playerName.trim() || !participant.primary);
   const playerNameOptions = playerSuggestions.map((player) => player.name);
   const availableWinConditions = [...new Set([...DEFAULT_WIN_CONDITIONS, ...winConditionSuggestions])];
@@ -339,13 +347,25 @@ export default function AddGamePage() {
             <h1 className='wireframe-title'>Add Game</h1>
           </div>
 
-          <button
-            type='submit'
-            disabled={isLoading || hasIncompleteSeat}
-            className='dashboard-add-game-card dashboard-save-button disabled:cursor-not-allowed disabled:opacity-50'
-          >
-            {isLoading ? 'Saving...' : 'Save Game'}
-          </button>
+          <div className='relative'>
+            <button
+              type='submit'
+              disabled={isLoading || incompleteFields.length > 0}
+              className='dashboard-add-game-card dashboard-save-button disabled:cursor-not-allowed disabled:opacity-50'
+            >
+              {isLoading ? 'Saving...' : 'Save Game'}
+            </button>
+            {incompleteFields.length > 0 && !isLoading && (
+              <div className='save-button-tooltip'>
+                <p className='save-button-tooltip-heading'>Required to save:</p>
+                <ul className='save-button-tooltip-list'>
+                  {incompleteFields.map((field) => (
+                    <li key={field}>{field}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className='grid w-full gap-3 text-left sm:grid-cols-2 lg:grid-cols-4'>

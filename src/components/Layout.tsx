@@ -9,6 +9,7 @@ const links = [
   { to: '/add-game', label: 'Add Game' },
   { to: '/history', label: 'History' },
   { to: '/players', label: 'Pod' },
+  { to: '/me', label: 'Me' },
 ];
 
 function AddGameNavLabel() {

@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage';
 import AddGamePage from './pages/AddGamePage';
 import GameHistoryPage from './pages/GameHistoryPage';
 import PlayersPage from './pages/PlayersPage';
+import MyProfilePage from './pages/MyProfilePage';
 import LoginPage from './pages/LoginPage';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
               <Route path='/add-game' element={<AddGamePage />} />
               <Route path='/history' element={<GameHistoryPage />} />
               <Route path='/players' element={<PlayersPage />} />
+              <Route path='/me' element={<MyProfilePage />} />
               <Route path='/commanders' element={<Navigate to='/' replace />} />
             </Route>
           </Route>

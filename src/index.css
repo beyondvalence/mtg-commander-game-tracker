@@ -250,6 +250,26 @@ body {
       0 20px 44px rgba(0, 0, 0, 0.28);
   }
 
+  .save-button-tooltip {
+    @apply pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border p-3 text-sm opacity-0 transition-opacity;
+    background: var(--app-panel);
+    border-color: var(--app-border);
+    color: var(--app-text);
+  }
+
+  .save-button-tooltip-heading {
+    @apply mb-1.5 font-semibold;
+  }
+
+  .save-button-tooltip-list {
+    @apply space-y-1 pl-3;
+    list-style-type: disc;
+  }
+
+  div:hover > .save-button-tooltip {
+    @apply opacity-100;
+  }
+
   .app-card-soft {
     @apply rounded-lg;
     background: var(--app-panel-soft);

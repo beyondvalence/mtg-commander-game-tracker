@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getScryfallSearchUrl } from '../lib/scryfall';
 import { supabase } from '../lib/supabase';
-import { fetchNumberedGames, fetchWinConditionSuggestions, readSingleCommander, readSingleName, setGameWinner, type NumberedHistoryGame } from '../lib/gameRecords';
+import { fetchNumberedGames, fetchWinConditionSuggestions, readSingleCommander, readSingleName, relinkParticipantPlayer, setGameWinner, type NumberedHistoryGame } from '../lib/gameRecords';
 
 const DEFAULT_WIN_CONDITIONS = ['Combat', 'Combo', 'Commander Damage', 'Other'] as const;
 const GAME_NOTES_MAX_LENGTH = 500;
@@ -23,6 +23,7 @@ export default function GameHistoryPage() {
   const [winnerDrafts, setWinnerDrafts] = useState<Record<string, string>>({});
   const [killedFirstDrafts, setKilledFirstDrafts] = useState<Record<string, string[]>>({});
   const [turnLengthDrafts, setTurnLengthDrafts] = useState<Record<string, string>>({});
+  const [playerNameDrafts, setPlayerNameDrafts] = useState<Record<string, Record<string, string>>>({});
   const [winConditionOptions, setWinConditionOptions] = useState<string[]>([]);
   const [playerFilter, setPlayerFilter] = useState<string[]>(() => {
     const raw = searchParams.get('player') ?? '';
@@ -90,6 +91,15 @@ export default function GameHistoryPage() {
           setTurnLengthDrafts(
             nextGames.reduce<Record<string, string>>((drafts, game) => {
               drafts[game.id] = game.turn_length != null ? String(game.turn_length) : '';
+              return drafts;
+            }, {}),
+          );
+          setPlayerNameDrafts(
+            nextGames.reduce<Record<string, Record<string, string>>>((drafts, game) => {
+              drafts[game.id] = game.game_participants.reduce<Record<string, string>>((pd, participant) => {
+                pd[participant.id] = readSingleName(participant.player);
+                return pd;
+              }, {});
               return drafts;
             }, {}),
           );
@@ -231,6 +241,17 @@ export default function GameHistoryPage() {
         throw updateError;
       }
 
+      const game = games.find((g) => g.id === gameId);
+      if (game) {
+        for (const participant of game.game_participants) {
+          const newName = playerNameDrafts[gameId]?.[participant.id]?.trim();
+          const currentName = readSingleName(participant.player);
+          if (newName && newName !== currentName) {
+            await relinkParticipantPlayer(participant.id, gameId, newName);
+          }
+        }
+      }
+
       const nextWinnerParticipantId = winnerDrafts[gameId] || null;
       const nextKilledFirstIds = (killedFirstDrafts[gameId] ?? []).filter((id) => id !== nextWinnerParticipantId);
 
@@ -256,23 +277,29 @@ export default function GameHistoryPage() {
         }
       }
 
+      const renamedNames = playerNameDrafts[gameId] ?? {};
       setGames((currentGames) =>
-        currentGames.map((game) =>
-          game.id === gameId
+        currentGames.map((g) =>
+          g.id === gameId
             ? {
-                ...game,
+                ...g,
                 bracket: nextBracket,
                 win_condition: nextWinCondition,
                 notes: nextNotes,
                 turn_length: nextTurnLength,
                 finished: nextWinnerParticipantId !== null,
-                game_participants: game.game_participants.map((participant) => ({
-                  ...participant,
-                  is_winner: participant.id === nextWinnerParticipantId,
-                  killed_first: nextKilledFirstIds.includes(participant.id),
-                })),
+                game_participants: g.game_participants.map((participant) => {
+                  const newName = renamedNames[participant.id]?.trim();
+                  const playerObj = Array.isArray(participant.player) ? participant.player[0] : participant.player;
+                  return {
+                    ...participant,
+                    is_winner: participant.id === nextWinnerParticipantId,
+                    killed_first: nextKilledFirstIds.includes(participant.id),
+                    player: newName && playerObj ? { ...playerObj, name: newName } : participant.player,
+                  };
+                }),
               }
-            : game,
+            : g,
         ),
       );
       setEditingGameId(null);
@@ -281,6 +308,13 @@ export default function GameHistoryPage() {
     } finally {
       setSavingGameId(null);
     }
+  };
+
+  const handlePlayerNameDraftChange = (gameId: string, participantId: string, name: string) => {
+    setPlayerNameDrafts((drafts) => ({
+      ...drafts,
+      [gameId]: { ...drafts[gameId], [participantId]: name },
+    }));
   };
 
   const handleWinnerDraftChange = (gameId: string, winnerParticipantId: string) => {
@@ -331,6 +365,11 @@ export default function GameHistoryPage() {
 
   return (
     <section className='wireframe-shell space-y-4'>
+      <datalist id='player-rename-suggestions'>
+        {availablePlayers.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
       <div className='space-y-3 text-left'>
         <h1 className='wireframe-title'>Game History</h1>
         <div className='grid gap-3 md:grid-cols-4'>
@@ -626,12 +665,22 @@ export default function GameHistoryPage() {
                         <div className='flex items-start justify-between gap-3'>
                           <div className='min-w-0'>
                             <p className='app-muted text-xs font-bold uppercase tracking-[0.25em]'>Seat {participant.turn_order_position}</p>
-                            <Link
-                              to={`/players?player=${encodeURIComponent(readSingleName(participant.player))}`}
-                              className='font-medium underline decoration-transparent underline-offset-2 transition hover:decoration-current'
-                            >
-                              {readSingleName(participant.player)}
-                            </Link>
+                            {editingGameId === game.id ? (
+                              <input
+                                type='text'
+                                list='player-rename-suggestions'
+                                value={playerNameDrafts[game.id]?.[participant.id] ?? readSingleName(participant.player)}
+                                onChange={(e) => handlePlayerNameDraftChange(game.id, participant.id, e.target.value)}
+                                className='app-input-compact mt-0.5 w-full'
+                              />
+                            ) : (
+                              <Link
+                                to={`/players?player=${encodeURIComponent(readSingleName(participant.player))}`}
+                                className='font-medium underline decoration-transparent underline-offset-2 transition hover:decoration-current'
+                              >
+                                {readSingleName(participant.player)}
+                              </Link>
+                            )}
                           </div>
                           <div className='flex flex-col items-end gap-1.5'>
                             {editingGameId === game.id ? (

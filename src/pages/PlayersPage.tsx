@@ -92,8 +92,9 @@ export default function PlayersPage() {
 
   const filteredPlayers = deferredSearchValue
     ? players.filter((player) => {
-        const commanderNames = player.commanders.map((commander) => commander.name).join(' ');
-        return player.name.includes(deferredSearchValue) || commanderNames.includes(deferredSearchValue);
+        const needle = deferredSearchValue.toLowerCase();
+        const commanderNames = player.commanders.map((commander) => commander.name).join(' ').toLowerCase();
+        return player.name.toLowerCase().includes(needle) || commanderNames.includes(needle);
       })
     : players;
 

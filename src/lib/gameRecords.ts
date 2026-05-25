@@ -464,6 +464,18 @@ export async function fetchAddGamePlayerSuggestions() {
     playerMap.set(player.id, existingPlayer);
   }
 
+  const { data: standalonePlayers, error: standaloneError } = await supabase
+    .from('players')
+    .select('id, name');
+
+  if (standaloneError) throw standaloneError;
+
+  for (const p of (standalonePlayers as Array<{ id: string; name: string }> | null) ?? []) {
+    if (!playerMap.has(p.id)) {
+      playerMap.set(p.id, { id: p.id, name: p.name, commanders: [] });
+    }
+  }
+
   return [...playerMap.values()]
     .map((player) => ({
       ...player,
@@ -538,6 +550,132 @@ export async function createGameWithParticipants(input: {
   }
 
   return data;
+}
+
+export async function fetchProfilePlayerId(): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('player_id')
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+
+  return (data as { player_id: string | null } | null)?.player_id ?? null;
+}
+
+export async function updateProfilePlayerId(playerId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ player_id: playerId })
+    .eq('id', user.id);
+
+  if (error) throw error;
+}
+
+export async function createOrLinkPlayer(name: string): Promise<string> {
+  const trimmedName = name.trim();
+  if (!trimmedName) throw new Error('Player name cannot be empty');
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('players')
+    .upsert({ user_id: user.id, name: trimmedName }, { onConflict: 'user_id,name', ignoreDuplicates: false })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+
+  const playerId = (data as { id: string }).id;
+  await updateProfilePlayerId(playerId);
+  return playerId;
+}
+
+export async function fetchPlayerById(playerId: string): Promise<PlayerDirectoryEntry> {
+  const { data, error } = await supabase
+    .from('player_directory_entries')
+    .select('id, name, games_played, wins, win_rate, latest_played_at, latest_game_number, commanders')
+    .eq('id', playerId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (data) return toPlayerDirectoryEntry(data as PlayerDirectoryRow);
+
+  const { data: player, error: playerError } = await supabase
+    .from('players')
+    .select('id, name')
+    .eq('id', playerId)
+    .single();
+
+  if (playerError) throw playerError;
+
+  const p = player as { id: string; name: string };
+  return { id: p.id, name: p.name, gamesPlayed: 0, wins: 0, winRate: 0, latestPlayedAt: '', latestGameNumber: 0, commanders: [] };
+}
+
+export async function fetchPlayerRecentGames(playerId: string, limit: number): Promise<NumberedHistoryGame[]> {
+  const { data: participantData, error: participantError } = await supabase
+    .from('game_participants')
+    .select('game_id')
+    .eq('player_id', playerId);
+
+  if (participantError) throw participantError;
+
+  const gameIds = (participantData ?? []).map((p) => (p as { game_id: string }).game_id);
+
+  if (gameIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('numbered_games')
+    .select('id, played_at, created_at, number_of_players, bracket, service, turn_length, win_condition, notes, finished, game_number')
+    .in('id', gameIds)
+    .order('played_at', { ascending: false })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const gameRows = (data as NumberedGameRow[] | null) ?? [];
+  if (gameRows.length === 0) return [];
+
+  const participantsByGame = await fetchParticipantsForGames(gameRows.map((g) => g.id));
+
+  return gameRows.map((game) => ({
+    id: game.id,
+    played_at: game.played_at,
+    created_at: game.created_at,
+    number_of_players: game.number_of_players,
+    bracket: game.bracket,
+    service: game.service,
+    turn_length: game.turn_length,
+    win_condition: game.win_condition,
+    notes: game.notes,
+    finished: game.finished,
+    gameNumber: game.game_number,
+    game_participants: participantsByGame.get(game.id) ?? [],
+  }));
+}
+
+export async function relinkParticipantPlayer(
+  participantId: string,
+  gameId: string,
+  newPlayerName: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('relink_participant_player', {
+    p_participant_id: participantId,
+    p_game_id: gameId,
+    p_new_player_name: newPlayerName,
+  });
+  if (error) throw error;
 }
 
 export function readSingleName(value: { name: string } | { name: string }[] | null) {

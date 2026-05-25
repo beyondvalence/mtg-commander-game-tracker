@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getScryfallSearchUrl } from '../lib/scryfall';
 import { supabase } from '../lib/supabase';
@@ -21,10 +21,22 @@ export default function GameHistoryPage() {
   const [winConditionDrafts, setWinConditionDrafts] = useState<Record<string, string>>({});
   const [notesDrafts, setNotesDrafts] = useState<Record<string, string>>({});
   const [winnerDrafts, setWinnerDrafts] = useState<Record<string, string>>({});
+  const [killedFirstDrafts, setKilledFirstDrafts] = useState<Record<string, string[]>>({});
+  const [turnLengthDrafts, setTurnLengthDrafts] = useState<Record<string, string>>({});
   const [winConditionOptions, setWinConditionOptions] = useState<string[]>([]);
-  const [playerFilter, setPlayerFilter] = useState(searchParams.get('player') ?? '');
+  const [playerFilter, setPlayerFilter] = useState<string[]>(() => {
+    const raw = searchParams.get('player') ?? '';
+    return raw ? raw.split(',').filter(Boolean) : [];
+  });
+  const [playerFilterDraft, setPlayerFilterDraft] = useState<string[]>(() => {
+    const raw = searchParams.get('player') ?? '';
+    return raw ? raw.split(',').filter(Boolean) : [];
+  });
+  const [isPlayerDropdownOpen, setIsPlayerDropdownOpen] = useState(false);
+  const playerDropdownRef = useRef<HTMLDivElement>(null);
   const [bracketFilter, setBracketFilter] = useState(searchParams.get('bracket') ?? '');
   const [winConditionFilter, setWinConditionFilter] = useState(searchParams.get('winCondition') ?? '');
+  const [finishedFilter, setFinishedFilter] = useState(searchParams.get('finished') ?? '');
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
   const [savingGameId, setSavingGameId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,6 +81,18 @@ export default function GameHistoryPage() {
               return drafts;
             }, {}),
           );
+          setKilledFirstDrafts(
+            nextGames.reduce<Record<string, string[]>>((drafts, game) => {
+              drafts[game.id] = game.game_participants.filter((participant) => participant.killed_first).map((participant) => participant.id);
+              return drafts;
+            }, {}),
+          );
+          setTurnLengthDrafts(
+            nextGames.reduce<Record<string, string>>((drafts, game) => {
+              drafts[game.id] = game.turn_length != null ? String(game.turn_length) : '';
+              return drafts;
+            }, {}),
+          );
         }
       } catch (err) {
         if (isMounted) {
@@ -89,12 +113,16 @@ export default function GameHistoryPage() {
   }, []);
 
   useEffect(() => {
-    const nextPlayerFilter = searchParams.get('player') ?? '';
+    const rawPlayer = searchParams.get('player') ?? '';
+    const nextPlayerFilter = rawPlayer ? rawPlayer.split(',').filter(Boolean) : [];
     const nextBracketFilter = searchParams.get('bracket') ?? '';
     const nextWinConditionFilter = searchParams.get('winCondition') ?? '';
+    const nextFinishedFilter = searchParams.get('finished') ?? '';
     setPlayerFilter(nextPlayerFilter);
+    setPlayerFilterDraft(nextPlayerFilter);
     setBracketFilter(nextBracketFilter);
     setWinConditionFilter(nextWinConditionFilter);
+    setFinishedFilter(nextFinishedFilter);
   }, [searchParams]);
 
   useEffect(() => {
@@ -112,6 +140,44 @@ export default function GameHistoryPage() {
     };
   }, [selectedGameId, isLoading, error, games]);
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (playerDropdownRef.current && !playerDropdownRef.current.contains(event.target as Node)) {
+        setIsPlayerDropdownOpen(false);
+        setPlayerFilterDraft(playerFilter);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [playerFilter]);
+
+  const handlePlayerFilterApply = () => {
+    setPlayerFilter(playerFilterDraft);
+    setIsPlayerDropdownOpen(false);
+    const nextParams = new URLSearchParams(searchParams);
+    if (playerFilterDraft.length > 0) {
+      nextParams.set('player', playerFilterDraft.join(','));
+    } else {
+      nextParams.delete('player');
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const handlePlayerFilterClear = () => {
+    setPlayerFilterDraft([]);
+    setPlayerFilter([]);
+    setIsPlayerDropdownOpen(false);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('player');
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const togglePlayerDraft = (player: string) => {
+    setPlayerFilterDraft((current) =>
+      current.includes(player) ? current.filter((p) => p !== player) : [...current, player],
+    );
+  };
+
   const handleWinConditionDraftChange = (gameId: string, winCondition: string) => {
     setWinConditionDrafts((currentDrafts) => ({
       ...currentDrafts,
@@ -123,6 +189,13 @@ export default function GameHistoryPage() {
     setBracketDrafts((currentDrafts) => ({
       ...currentDrafts,
       [gameId]: bracket,
+    }));
+  };
+
+  const handleTurnLengthDraftChange = (gameId: string, turnLength: string) => {
+    setTurnLengthDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [gameId]: turnLength,
     }));
   };
 
@@ -141,6 +214,7 @@ export default function GameHistoryPage() {
       const nextBracket = parseInt(bracketDrafts[gameId] ?? '', 10);
       const nextWinCondition = winConditionDrafts[gameId]?.trim();
       const nextNotes = notesDrafts[gameId]?.trim() || null;
+      const nextTurnLength = turnLengthDrafts[gameId] ? parseInt(turnLengthDrafts[gameId], 10) : null;
       if (!Number.isInteger(nextBracket) || nextBracket < 1 || nextBracket > 5) {
         throw new Error('Please choose a bracket before saving');
       }
@@ -150,7 +224,7 @@ export default function GameHistoryPage() {
 
       const { error: updateError } = await supabase
         .from('games')
-        .update({ bracket: nextBracket, win_condition: nextWinCondition, notes: nextNotes })
+        .update({ bracket: nextBracket, win_condition: nextWinCondition, notes: nextNotes, turn_length: nextTurnLength })
         .eq('id', gameId);
 
       if (updateError) {
@@ -158,7 +232,29 @@ export default function GameHistoryPage() {
       }
 
       const nextWinnerParticipantId = winnerDrafts[gameId] || null;
+      const nextKilledFirstIds = (killedFirstDrafts[gameId] ?? []).filter((id) => id !== nextWinnerParticipantId);
+
+      const { error: clearKilledFirstError } = await supabase
+        .from('game_participants')
+        .update({ killed_first: false })
+        .eq('game_id', gameId);
+
+      if (clearKilledFirstError) {
+        throw clearKilledFirstError;
+      }
+
       await setGameWinner(gameId, nextWinnerParticipantId);
+
+      if (nextKilledFirstIds.length > 0) {
+        const { error: setKilledFirstError } = await supabase
+          .from('game_participants')
+          .update({ killed_first: true })
+          .in('id', nextKilledFirstIds);
+
+        if (setKilledFirstError) {
+          throw setKilledFirstError;
+        }
+      }
 
       setGames((currentGames) =>
         currentGames.map((game) =>
@@ -168,9 +264,12 @@ export default function GameHistoryPage() {
                 bracket: nextBracket,
                 win_condition: nextWinCondition,
                 notes: nextNotes,
+                turn_length: nextTurnLength,
+                finished: nextWinnerParticipantId !== null,
                 game_participants: game.game_participants.map((participant) => ({
                   ...participant,
                   is_winner: participant.id === nextWinnerParticipantId,
+                  killed_first: nextKilledFirstIds.includes(participant.id),
                 })),
               }
             : game,
@@ -189,6 +288,27 @@ export default function GameHistoryPage() {
       ...currentDrafts,
       [gameId]: winnerParticipantId,
     }));
+    if (winnerParticipantId) {
+      setKilledFirstDrafts((currentDrafts) => ({
+        ...currentDrafts,
+        [gameId]: (currentDrafts[gameId] ?? []).filter((id) => id !== winnerParticipantId),
+      }));
+    }
+  };
+
+  const handleKilledFirstDraftToggle = (gameId: string, participantId: string) => {
+    setKilledFirstDrafts((currentDrafts) => {
+      const current = currentDrafts[gameId] ?? [];
+      const isSelected = current.includes(participantId);
+      return {
+        ...currentDrafts,
+        [gameId]: isSelected ? current.filter((id) => id !== participantId) : [...current, participantId],
+      };
+    });
+    setWinnerDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [gameId]: currentDrafts[gameId] === participantId ? '' : currentDrafts[gameId] ?? '',
+    }));
   };
 
   const availablePlayers = [...new Set(
@@ -200,37 +320,85 @@ export default function GameHistoryPage() {
   )].sort((left, right) => left.localeCompare(right));
 
   const filteredGames = games.filter((game) => {
-    const matchesPlayer = !playerFilter.trim()
-      || game.game_participants.some((participant) => readSingleName(participant.player).includes(playerFilter.trim()));
+    const matchesPlayer = playerFilter.length === 0
+      || game.game_participants.some((participant) => playerFilter.includes(readSingleName(participant.player)));
     const matchesBracket = !bracketFilter || String(game.bracket) === bracketFilter;
     const matchesWinCondition = !winConditionFilter || game.win_condition === winConditionFilter;
+    const matchesFinished = !finishedFilter || String(game.finished) === finishedFilter;
 
-    return matchesPlayer && matchesBracket && matchesWinCondition;
+    return matchesPlayer && matchesBracket && matchesWinCondition && matchesFinished;
   });
 
   return (
     <section className='wireframe-shell space-y-4'>
       <div className='space-y-3 text-left'>
         <h1 className='wireframe-title'>Game History</h1>
-        <div className='grid gap-3 md:grid-cols-3'>
-          <input
-            type='text'
-            list='history-player-filter-options'
-            value={playerFilter}
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              setPlayerFilter(nextValue);
-              const nextParams = new URLSearchParams(searchParams);
-              if (nextValue.trim()) {
-                nextParams.set('player', nextValue);
-              } else {
-                nextParams.delete('player');
-              }
-              setSearchParams(nextParams, { replace: true });
-            }}
-            placeholder='Filter by player name'
-            className='app-input'
-          />
+        <div className='grid gap-3 md:grid-cols-4'>
+          <div className='relative' ref={playerDropdownRef}>
+            <button
+              type='button'
+              onClick={() => {
+                setPlayerFilterDraft(playerFilter);
+                setIsPlayerDropdownOpen((open) => !open);
+              }}
+              className='app-input flex w-full items-center justify-between gap-2 text-left'
+            >
+              <span className={playerFilter.length === 0 ? 'app-muted' : ''}>
+                {playerFilter.length === 0
+                  ? 'All players'
+                  : playerFilter.length === 1
+                  ? playerFilter[0]
+                  : `${playerFilter.length} players`}
+              </span>
+              <svg viewBox='0 0 20 20' className='h-4 w-4 shrink-0 app-muted' fill='none' stroke='currentColor' strokeWidth='1.9'>
+                <path d='m6 8 4 4 4-4' strokeLinecap='round' strokeLinejoin='round' />
+              </svg>
+            </button>
+            {isPlayerDropdownOpen && (
+              <div className='absolute left-0 top-full z-20 mt-1 w-full min-w-[12rem] rounded-xl border shadow-lg' style={{ background: 'var(--app-panel)', borderColor: 'var(--app-border)' }}>
+                <div className='max-h-52 overflow-y-auto p-1'>
+                  <label className='flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium hover:bg-[var(--app-panel-soft)]'>
+                    <input
+                      type='checkbox'
+                      checked={playerFilterDraft.length === 0}
+                      onChange={() => setPlayerFilterDraft([])}
+                      className='h-4 w-4'
+                    />
+                    All players
+                  </label>
+                  {availablePlayers.map((player) => (
+                    <label key={player} className='flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-[var(--app-panel-soft)]'>
+                      <input
+                        type='checkbox'
+                        checked={playerFilterDraft.includes(player)}
+                        onChange={() => togglePlayerDraft(player)}
+                        className='h-4 w-4'
+                      />
+                      {player}
+                    </label>
+                  ))}
+                </div>
+                <div className='flex gap-2 border-t p-2' style={{ borderColor: 'var(--app-border)' }}>
+                  <button
+                    type='button'
+                    onClick={handlePlayerFilterApply}
+                    className='flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold'
+                    style={{ background: 'var(--app-accent)', color: 'var(--app-accent-text)' }}
+                  >
+                    Apply
+                  </button>
+                  <button
+                    type='button'
+                    onClick={handlePlayerFilterClear}
+                    className='flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold'
+                    style={{ background: 'var(--app-panel-soft)', color: 'var(--app-muted)' }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <select
             value={bracketFilter}
             onChange={(event) => {
@@ -275,11 +443,25 @@ export default function GameHistoryPage() {
               </option>
             ))}
           </select>
-          <datalist id='history-player-filter-options'>
-            {availablePlayers.map((player) => (
-              <option key={player} value={player} />
-            ))}
-          </datalist>
+          <select
+            value={finishedFilter}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setFinishedFilter(nextValue);
+              const nextParams = new URLSearchParams(searchParams);
+              if (nextValue) {
+                nextParams.set('finished', nextValue);
+              } else {
+                nextParams.delete('finished');
+              }
+              setSearchParams(nextParams, { replace: true });
+            }}
+            className='app-input'
+          >
+            <option value=''>All games</option>
+            <option value='true'>Finished</option>
+            <option value='false'>Unfinished</option>
+          </select>
         </div>
       </div>
 
@@ -320,19 +502,24 @@ export default function GameHistoryPage() {
                     <p className='app-muted text-base md:text-lg'>{game.number_of_players} players</p>
                     <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
                     <p className='app-muted text-base md:text-lg'>{game.service}</p>
-                    {game.turn_length ? (
-                      <>
-                        <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
-                        <p className='app-muted text-base md:text-lg'>{game.turn_length} turns</p>
-                      </>
-                    ) : null}
                     {editingGameId === game.id ? (
                       <>
                         <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
                         <select
+                          value={turnLengthDrafts[game.id] ?? ''}
+                          onChange={(event) => handleTurnLengthDraftChange(game.id, event.target.value)}
+                          className='app-input-compact w-auto'
+                        >
+                          <option value=''>No turn count</option>
+                          {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                            <option key={n} value={String(n)}>{n} turns</option>
+                          ))}
+                        </select>
+                        <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
+                        <select
                           value={bracketDrafts[game.id] ?? String(game.bracket)}
                           onChange={(event) => handleBracketDraftChange(game.id, event.target.value)}
-                          className='app-input-compact min-w-[8.5rem]'
+                          className='app-input-compact w-auto'
                         >
                           <option value='1'>Bracket 1</option>
                           <option value='2'>Bracket 2</option>
@@ -344,7 +531,7 @@ export default function GameHistoryPage() {
                         <select
                           value={winConditionDrafts[game.id] ?? ''}
                           onChange={(event) => handleWinConditionDraftChange(game.id, event.target.value)}
-                          className='app-input-compact min-w-[13rem] flex-1'
+                          className='app-input-compact w-auto'
                         >
                           <option value=''>Select win condition</option>
                           {winConditionOptions.map((option) => (
@@ -356,6 +543,12 @@ export default function GameHistoryPage() {
                       </>
                     ) : (
                       <>
+                        {game.turn_length ? (
+                          <>
+                            <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
+                            <p className='app-muted text-base md:text-lg'>{game.turn_length} turns</p>
+                          </>
+                        ) : null}
                         <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
                         <p className='app-muted text-base md:text-lg'>Bracket {game.bracket}</p>
                         <span className='app-muted text-base md:text-lg' aria-hidden='true'>•</span>
@@ -389,11 +582,11 @@ export default function GameHistoryPage() {
                   <div
                     className='app-chip border'
                     style={{
-                      borderColor: game.game_participants.filter((participant) => participant.is_winner).length === 1 ? '#047857' : '#dc2626',
-                      color: game.game_participants.filter((participant) => participant.is_winner).length === 1 ? '#047857' : '#dc2626',
+                      borderColor: game.finished ? '#047857' : '#dc2626',
+                      color: game.finished ? '#047857' : '#dc2626',
                     }}
                   >
-                    {game.game_participants.filter((participant) => participant.is_winner).length === 1 ? 'Winner locked in' : 'No winner assigned'}
+                    {game.finished ? 'Game Finished' : 'Unfinished'}
                   </div>
                   <button
                     type='button'
@@ -424,6 +617,9 @@ export default function GameHistoryPage() {
                     const primaryCommander = readSingleCommander(participant.primary_commander);
                     const secondaryCommander = readSingleCommander(participant.secondary_commander);
                     const isSelectedWinner = winnerDrafts[game.id] === participant.id;
+                    const isSelectedKilledFirst = (killedFirstDrafts[game.id] ?? []).includes(participant.id);
+                    const killedFirstDraftCount = (killedFirstDrafts[game.id] ?? []).length;
+                    const killedFirstCount = game.game_participants.filter((p) => p.killed_first).length;
 
                     return (
                       <li key={participant.id} className='history-player-card app-card-soft flex min-h-[12rem] min-w-[14rem] flex-col gap-3 overflow-hidden p-3'>
@@ -437,24 +633,50 @@ export default function GameHistoryPage() {
                               {readSingleName(participant.player)}
                             </Link>
                           </div>
-                          {editingGameId === game.id ? (
-                            <button
-                              type='button'
-                              onClick={() => handleWinnerDraftChange(game.id, isSelectedWinner ? '' : participant.id)}
-                              className='rounded-full border px-3 py-1 text-sm font-semibold transition'
-                              style={{
-                                borderColor: isSelectedWinner ? '#047857' : 'var(--app-border)',
-                                color: isSelectedWinner ? '#047857' : 'var(--app-text)',
-                                background: isSelectedWinner ? 'color-mix(in srgb, #047857 10%, var(--app-panel))' : 'var(--app-panel)',
-                              }}
-                            >
-                              Winner
-                            </button>
-                          ) : participant.is_winner ? (
-                            <span className='rounded-full border border-emerald-700 px-3 py-1 text-sm font-semibold text-emerald-700'>
-                              Winner
-                            </span>
-                          ) : null}
+                          <div className='flex flex-col items-end gap-1.5'>
+                            {editingGameId === game.id ? (
+                              <>
+                                <button
+                                  type='button'
+                                  onClick={() => handleWinnerDraftChange(game.id, isSelectedWinner ? '' : participant.id)}
+                                  className='rounded-full border px-3 py-1 text-sm font-semibold transition'
+                                  style={{
+                                    borderColor: isSelectedWinner ? '#047857' : 'var(--app-border)',
+                                    color: isSelectedWinner ? '#047857' : 'var(--app-text)',
+                                    background: isSelectedWinner ? 'color-mix(in srgb, #047857 10%, var(--app-panel))' : 'var(--app-panel)',
+                                  }}
+                                >
+                                  Winner
+                                </button>
+                                <button
+                                  type='button'
+                                  onClick={() => handleKilledFirstDraftToggle(game.id, participant.id)}
+                                  disabled={isSelectedWinner}
+                                  className='rounded-full border px-3 py-1 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40'
+                                  style={{
+                                    borderColor: isSelectedKilledFirst ? '#dc2626' : 'var(--app-border)',
+                                    color: isSelectedKilledFirst ? '#dc2626' : 'var(--app-text)',
+                                    background: isSelectedKilledFirst ? 'color-mix(in srgb, #dc2626 10%, var(--app-panel))' : 'var(--app-panel)',
+                                  }}
+                                >
+                                  {killedFirstDraftCount >= 2 && isSelectedKilledFirst ? 'Died Together' : 'Killed First'}
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                {participant.is_winner && (
+                                  <span className='rounded-full border border-emerald-700 px-3 py-1 text-sm font-semibold text-emerald-700'>
+                                    Winner
+                                  </span>
+                                )}
+                                {participant.killed_first && (
+                                  <span className='rounded-full border border-red-600 px-3 py-1 text-sm font-semibold text-red-600'>
+                                    {killedFirstCount >= 2 ? 'Died Together' : 'Killed First'}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         <div className='history-commander-names min-w-0'>

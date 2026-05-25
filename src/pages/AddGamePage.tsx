@@ -37,6 +37,7 @@ function createParticipantSeat(seat: number): ParticipantInput {
     playerName: '',
     primary: null,
     isWinner: false,
+    killedFirst: false,
   };
 }
 
@@ -139,6 +140,7 @@ export default function AddGamePage() {
         currentParticipants.map((participant) => ({
           ...participant,
           isWinner: false,
+          killedFirst: false,
         })),
       );
     }
@@ -252,7 +254,22 @@ export default function AddGamePage() {
       currentParticipants.map((participant) => ({
         ...participant,
         isWinner: participant.seat === seat ? !participant.isWinner : false,
+        killedFirst: participant.seat === seat && !participant.isWinner ? false : participant.killedFirst,
       })),
+    );
+  };
+
+  const handleKilledFirstChange = (seat: number) => {
+    setParticipants((currentParticipants) =>
+      currentParticipants.map((participant) =>
+        participant.seat === seat
+          ? {
+              ...participant,
+              killedFirst: !participant.killedFirst,
+              isWinner: participant.isWinner && participant.killedFirst ? false : participant.isWinner,
+            }
+          : participant,
+      ),
     );
   };
 
@@ -301,6 +318,7 @@ export default function AddGamePage() {
             primaryCommander: participant.primary,
             secondaryCommander: participant.secondary ?? null,
             isWinner: formData.finishedGame ? participant.isWinner || false : false,
+            killedFirst: participant.killedFirst || false,
           };
         }),
       });
@@ -444,6 +462,7 @@ export default function AddGamePage() {
 
           <div className='grid gap-3 md:grid-cols-2'>
             {participants.map((participant) => {
+              const killedFirstCount = participants.filter((p) => p.killedFirst).length;
               const matchingPlayer = findMatchingPlayerSuggestion(participant.playerName);
               const playerCommanderSuggestions = matchingPlayer?.commanders ?? [];
               const commanderCards = [
@@ -469,15 +488,35 @@ export default function AddGamePage() {
                   <div className='flex items-center justify-between gap-3'>
                     <p className='app-muted text-sm font-bold uppercase tracking-[0.25em] md:text-base'>Seat {participant.seat}</p>
                     {finishedGame && (
-                      <label className='app-card-soft inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold'>
-                        <input
-                          type='checkbox'
-                          checked={Boolean(participant.isWinner)}
-                          onChange={() => handleWinnerChange(participant.seat)}
-                          className='h-4 w-4'
-                        />
-                        Winner
-                      </label>
+                      <div className='flex items-center gap-1.5'>
+                        <label
+                          className='inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold'
+                          style={participant.killedFirst
+                            ? { opacity: 0.4, cursor: 'not-allowed', borderColor: 'var(--app-border)', color: 'var(--app-text)', background: 'var(--app-panel-soft)' }
+                            : { borderColor: participant.isWinner ? '#047857' : 'var(--app-border)', color: participant.isWinner ? '#047857' : 'var(--app-text)', background: participant.isWinner ? 'color-mix(in srgb, #047857 10%, var(--app-panel))' : 'var(--app-panel-soft)' }}
+                        >
+                          <input
+                            type='checkbox'
+                            checked={Boolean(participant.isWinner)}
+                            onChange={() => handleWinnerChange(participant.seat)}
+                            disabled={Boolean(participant.killedFirst)}
+                            className='h-4 w-4'
+                          />
+                          Winner
+                        </label>
+                        <label
+                          className='inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold'
+                          style={{ borderColor: participant.killedFirst ? '#dc2626' : 'var(--app-border)', color: participant.killedFirst ? '#dc2626' : 'var(--app-text)', background: participant.killedFirst ? 'color-mix(in srgb, #dc2626 10%, var(--app-panel))' : 'var(--app-panel-soft)' }}
+                        >
+                          <input
+                            type='checkbox'
+                            checked={Boolean(participant.killedFirst)}
+                            onChange={() => handleKilledFirstChange(participant.seat)}
+                            className='h-4 w-4'
+                          />
+                          {killedFirstCount >= 2 && participant.killedFirst ? 'Died Together' : 'Killed First'}
+                        </label>
+                      </div>
                     )}
                   </div>
 

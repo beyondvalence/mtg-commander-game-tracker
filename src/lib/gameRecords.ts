@@ -7,6 +7,7 @@ export type HistoryGameParticipant = {
   id: string;
   turn_order_position: number;
   is_winner: boolean;
+  killed_first: boolean;
   player: { id: string; name: string } | { id: string; name: string }[] | null;
   primary_commander: { name: string; image_url: string | null } | { name: string; image_url: string | null }[] | null;
   secondary_commander: { name: string; image_url: string | null } | { name: string; image_url: string | null }[] | null;
@@ -22,6 +23,7 @@ export type HistoryGame = {
   turn_length: number | null;
   win_condition: string;
   notes: string | null;
+  finished: boolean;
   game_participants: HistoryGameParticipant[];
 };
 
@@ -79,6 +81,7 @@ export type CreateGameParticipantPayload = {
   primaryCommander: CommanderCard;
   secondaryCommander: CommanderCard | null;
   isWinner: boolean;
+  killedFirst: boolean;
 };
 
 type NumberedGameRow = Omit<HistoryGame, 'game_participants'> & {
@@ -213,6 +216,7 @@ async function fetchParticipantsForGames(gameIds: string[] | null) {
       id,
       turn_order_position,
       is_winner,
+      killed_first,
       player:players (
         id,
         name
@@ -250,6 +254,7 @@ async function fetchParticipantsForGames(gameIds: string[] | null) {
       id: participant.id,
       turn_order_position: participant.turn_order_position,
       is_winner: participant.is_winner,
+      killed_first: participant.killed_first,
       player: participant.player,
       primary_commander: participant.primary_commander,
       secondary_commander: participant.secondary_commander,
@@ -271,6 +276,7 @@ export async function fetchNumberedGames(options: { limit?: number } = {}) {
       turn_length,
       win_condition,
       notes,
+      finished,
       game_number
     `;
 
@@ -309,6 +315,7 @@ export async function fetchNumberedGames(options: { limit?: number } = {}) {
     turn_length: game.turn_length,
     win_condition: game.win_condition,
     notes: game.notes,
+    finished: game.finished,
     gameNumber: game.game_number,
     game_participants: participantsByGame.get(game.id) ?? [],
   }));
@@ -504,6 +511,7 @@ export async function createGameWithParticipants(input: {
       seat: participant.seat,
       player_name: participant.playerName.trim(),
       is_winner: participant.isWinner,
+      killed_first: participant.killedFirst,
       primary_commander: {
         scryfall_id: participant.primaryCommander.scryfallId,
         name: participant.primaryCommander.name,

@@ -67,3 +67,18 @@ Copy `.env.example` to `.env`, fill in:
 - `numbered_games` view adds sequential `game_number` derived from `played_at` ordering; use instead of querying `games` directly when display numbers needed.
 - `relink_participant_player` RPC uses SECURITY DEFINER with a null-intermediate 3-step sequence to satisfy `trg_enforce_game_winner_consistency_from_participants` (AFTER ROW trigger): null `games.winner_player_id` → update `game_participants.player_id` → restore `games.winner_player_id`.
 - `<datalist>` for player rename suggestions in history page lives at the top of the JSX, outside all `overflow-hidden`/`overflow-x-auto` containers, so browser anchors the popup correctly to whichever input is active.
+- Public signup is open in the UI by default; Supabase Dashboard Auth settings control whether email confirmation is required and whether signup is restricted.
+- History and Players filters are URL-backed client-side filters, not server-filtered queries.
+
+## Ignored Local Files
+
+- `.agents/`
+- `skills-lock.json`
+- `src/mtg-commander-game-tracker.code-workspace`
+
+## TODO
+
+- Enable Supabase Auth leaked password protection in Dashboard.
+- Add a first-kill field or selector.
+- Add a died-alone selector.
+- Consider adding indexes for advisor-reported unindexed foreign keys on `games` and `game_participants`.

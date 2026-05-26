@@ -82,3 +82,4 @@ Copy `.env.example` to `.env`, fill in:
 - Add a first-kill field or selector.
 - Add a died-alone selector.
 - Consider adding indexes for advisor-reported unindexed foreign keys on `games` and `game_participants`.
+- Add pod feature: named groups of players, invite-code join flow, pod-scoped game and stat views.

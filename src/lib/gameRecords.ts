@@ -265,7 +265,7 @@ async function fetchParticipantsForGames(gameIds: string[] | null) {
   return participantsByGame;
 }
 
-export async function fetchNumberedGames(options: { limit?: number } = {}) {
+export async function fetchNumberedGames(options: { limit?: number; podId?: string } = {}) {
   const query = `
       id,
       played_at,
@@ -286,6 +286,10 @@ export async function fetchNumberedGames(options: { limit?: number } = {}) {
     .order('played_at', { ascending: false })
     .order('created_at', { ascending: false })
     .order('id', { ascending: false });
+
+  if (options.podId) {
+    gamesQuery = gamesQuery.eq('pod_id', options.podId);
+  }
 
   if (options.limit) {
     gamesQuery = gamesQuery.limit(options.limit);
@@ -321,39 +325,55 @@ export async function fetchNumberedGames(options: { limit?: number } = {}) {
   }));
 }
 
-export async function fetchDashboardSnapshot() {
-  const [summaryResult, recentGames] = await Promise.all([
+export async function fetchDashboardSnapshot(podId: string) {
+  const [gamesResult, participantsResult, recentGames] = await Promise.all([
     supabase
-      .from('dashboard_summary')
-      .select('total_games, total_commanders, total_players')
-      .single(),
-    fetchNumberedGames({ limit: 3 }),
+      .from('games')
+      .select('id', { count: 'exact', head: true })
+      .eq('pod_id', podId),
+    supabase
+      .from('game_participants')
+      .select('player_id, primary_commander_id')
+      .eq('pod_id', podId),
+    fetchNumberedGames({ limit: 3, podId }),
   ]);
 
-  if (summaryResult.error) {
-    throw summaryResult.error;
-  }
+  if (gamesResult.error) throw gamesResult.error;
+  if (participantsResult.error) throw participantsResult.error;
+
+  const participants = participantsResult.data ?? [];
+  const totalPlayers = new Set(participants.map((p) => p.player_id)).size;
+  const totalCommanders = new Set(participants.map((p) => p.primary_commander_id)).size;
 
   return {
-    totalGames: summaryResult.data.total_games ?? 0,
-    totalCommanders: summaryResult.data.total_commanders ?? 0,
-    totalPlayers: summaryResult.data.total_players ?? 0,
+    totalGames: gamesResult.count ?? 0,
+    totalCommanders,
+    totalPlayers,
     latestGame: recentGames[0] ?? null,
     recentGames,
   };
 }
 
-export async function fetchPlayerDirectory() {
+export async function fetchPlayerDirectory(podId: string) {
+  const { data: participants, error: pErr } = await supabase
+    .from('game_participants')
+    .select('player_id')
+    .eq('pod_id', podId);
+
+  if (pErr) throw pErr;
+
+  const playerIds = [...new Set((participants ?? []).map((p) => p.player_id))];
+  if (playerIds.length === 0) return [];
+
   const { data, error } = await supabase
     .from('player_directory_entries')
     .select('id, name, games_played, wins, win_rate, latest_played_at, latest_game_number, commanders')
+    .in('id', playerIds)
     .order('wins', { ascending: false })
     .order('games_played', { ascending: false })
     .order('name', { ascending: true });
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 
   return ((data as PlayerDirectoryRow[] | null) ?? []).map(toPlayerDirectoryEntry);
 }
@@ -502,6 +522,7 @@ export async function setGameWinner(gameId: string, winnerParticipantId: string 
 }
 
 export async function createGameWithParticipants(input: {
+  podId: string;
   playedAt: string;
   playersCount: number;
   bracket: number;
@@ -512,6 +533,7 @@ export async function createGameWithParticipants(input: {
   participants: CreateGameParticipantPayload[];
 }) {
   const { data, error } = await supabase.rpc('create_game_with_participants', {
+    p_pod_id: input.podId,
     p_played_at: input.playedAt,
     p_number_of_players: input.playersCount,
     p_bracket: input.bracket,

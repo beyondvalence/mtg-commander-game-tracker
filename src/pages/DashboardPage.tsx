@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { fetchDashboardSnapshot, readSingleName, type NumberedHistoryGame } from '../lib/gameRecords';
+import { usePod } from '../contexts/PodContext';
 
 type DashboardSnapshot = {
   totalGames: number;
@@ -25,11 +26,18 @@ function formatSeatOrder(game: NumberedHistoryGame) {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { activePodId, activePod } = usePod();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!activePodId) {
+      setIsLoading(false);
+      setSnapshot(null);
+      return;
+    }
+
     let isMounted = true;
 
     async function loadDashboard() {
@@ -37,7 +45,7 @@ export default function DashboardPage() {
         setIsLoading(true);
         setError(null);
 
-        const nextSnapshot = await fetchDashboardSnapshot();
+        const nextSnapshot = await fetchDashboardSnapshot(activePodId!);
         if (isMounted) {
           setSnapshot(nextSnapshot);
         }
@@ -57,16 +65,18 @@ export default function DashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [activePodId]);
 
   return (
     <section className='wireframe-shell'>
       <div className='space-y-6'>
         <div className='space-y-2'>
           <h1 className='wireframe-title'>Pod Highlights</h1>
+          {activePod && <p className='app-muted text-sm'>{activePod.podName}</p>}
         </div>
 
-        {isLoading && <p className='wireframe-copy'>Loading tracker summary...</p>}
+        {!activePodId && <p className='wireframe-copy'>No pod selected. Create or join a pod to get started.</p>}
+        {isLoading && activePodId && <p className='wireframe-copy'>Loading tracker summary...</p>}
         {error && <p className='wireframe-copy text-red-600'>{error}</p>}
 
         {!isLoading && !error && snapshot && (

@@ -641,6 +641,100 @@ body {
     color: var(--app-text);
   }
 
+  .pod-switcher-button {
+    @apply flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-sm font-semibold transition;
+    background: var(--app-panel);
+    border-color: var(--app-border);
+    color: var(--app-muted);
+    max-width: 11rem;
+  }
+
+  .pod-switcher-button:hover {
+    background: var(--app-hover);
+    color: var(--app-text);
+  }
+
+  .pod-switcher-label {
+    @apply min-w-0 flex-1 truncate text-left;
+  }
+
+  .pod-switcher-option {
+    @apply flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold transition;
+    color: var(--app-muted);
+  }
+
+  .pod-switcher-option:hover {
+    background: var(--app-panel-soft);
+    color: var(--app-text);
+  }
+
+  .pod-switcher-option-active {
+    background: var(--app-panel-soft);
+    color: var(--app-text);
+  }
+
+  .profile-avatar-button {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-bold transition;
+    background: var(--app-panel);
+    border-color: var(--app-border);
+    color: var(--app-text);
+  }
+
+  .profile-avatar-button:hover {
+    background: var(--app-hover);
+  }
+
+  .profile-dropdown-panel {
+    @apply absolute right-0 top-full z-40 mt-2 flex flex-col shadow-xl;
+    width: min(22rem, calc(100vw - 2rem));
+    max-height: min(90vh, 38rem);
+    overflow: hidden;
+  }
+
+  .profile-dropdown-header {
+    @apply flex items-center gap-3 border-b px-4 py-3;
+    border-color: var(--app-border);
+    flex-shrink: 0;
+  }
+
+  .profile-avatar-large {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold;
+    background: var(--app-panel-soft);
+    color: var(--app-text);
+  }
+
+  .profile-dropdown-tabs {
+    @apply flex border-b px-2 pt-1;
+    border-color: var(--app-border);
+    flex-shrink: 0;
+    gap: 0.25rem;
+  }
+
+  .profile-tab {
+    @apply rounded-t-lg px-3 py-2 text-sm font-semibold transition;
+    color: var(--app-muted);
+  }
+
+  .profile-tab:hover {
+    color: var(--app-text);
+  }
+
+  .profile-tab-active {
+    background: var(--app-panel-soft);
+    color: var(--app-text);
+  }
+
+  .profile-dropdown-content {
+    @apply flex-1 overflow-y-auto p-4;
+    min-height: 0;
+  }
+
+  .profile-dropdown-footer {
+    @apply border-t p-3;
+    border-color: var(--app-border);
+    flex-shrink: 0;
+  }
+
   .commander-stage {
     @apply flex items-center justify-center overflow-hidden rounded-[1.25rem] border p-3;
     min-height: 11.75rem;

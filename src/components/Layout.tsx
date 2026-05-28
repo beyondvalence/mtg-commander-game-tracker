@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { useAuth } from '../lib/auth';
 import { applyTheme, resolveInitialTheme, THEME_STORAGE_KEY, type ThemeMode } from '../lib/theme';
 import { PodTrackerLogo } from './PodTrackerLogo';
+import { PlayerProfileDropdown } from './PlayerProfileDropdown';
+import { PodSwitcher } from './PodSwitcher';
 
 const links = [
   { to: '/', label: 'Home' },
   { to: '/add-game', label: 'Add Game' },
   { to: '/history', label: 'History' },
   { to: '/players', label: 'Pod' },
-  { to: '/me', label: 'Me' },
 ];
 
 function AddGameNavLabel() {
@@ -41,11 +41,9 @@ function ThemeIcon({ theme }: { theme: ThemeMode }) {
 }
 
 export function Layout() {
-  const { signOut, user } = useAuth();
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     const initialTheme = resolveInitialTheme();
@@ -79,15 +77,6 @@ export function Layout() {
 
   const themeLabel = useMemo(() => (theme === 'dark' ? 'Dark mode' : 'Light mode'), [theme]);
 
-  const handleSignOut = async () => {
-    try {
-      setIsSigningOut(true);
-      await signOut();
-    } finally {
-      setIsSigningOut(false);
-    }
-  };
-
   return (
     <div className='mx-auto flex min-h-screen w-full max-w-[1550px] flex-col gap-4 px-4 py-4 md:px-6 md:py-6'>
       <header className='app-topbar' data-theme-menu-root>
@@ -108,14 +97,12 @@ export function Layout() {
                 {link.to === '/add-game' ? <AddGameNavLabel /> : <span>{link.label}</span>}
               </NavLink>
             ))}
+            <PodSwitcher />
           </nav>
         </div>
 
         <div className='ml-auto flex items-center gap-2'>
-          {user?.email && <span className='hidden max-w-[14rem] truncate text-sm font-medium app-muted lg:inline'>{user.email}</span>}
-          <button type='button' className='logout-button' onClick={handleSignOut} disabled={isSigningOut}>
-            {isSigningOut ? 'Signing out' : 'Logout'}
-          </button>
+          <PlayerProfileDropdown />
         </div>
 
         <div className='relative'>

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { getScryfallSearchUrl } from '../lib/scryfall';
 import { supabase } from '../lib/supabase';
 import { fetchNumberedGames, fetchWinConditionSuggestions, readSingleCommander, readSingleName, relinkParticipantPlayer, setGameWinner, type NumberedHistoryGame } from '../lib/gameRecords';
+import { usePod } from '../contexts/PodContext';
 
 const DEFAULT_WIN_CONDITIONS = ['Combat', 'Combo', 'Commander Damage', 'Other'] as const;
 const GAME_NOTES_MAX_LENGTH = 500;
@@ -14,6 +15,7 @@ function formatPlayedAt(value: string) {
 }
 
 export default function GameHistoryPage() {
+  const { activePodId, isPodAdmin } = usePod();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedGameId = searchParams.get('game') ?? '';
   const [games, setGames] = useState<NumberedHistoryGame[]>([]);
@@ -52,7 +54,7 @@ export default function GameHistoryPage() {
         setError(null);
 
         const [nextGames, nextWinConditionOptions] = await Promise.all([
-          fetchNumberedGames(),
+          fetchNumberedGames({ podId: activePodId ?? undefined }),
           fetchWinConditionSuggestions(),
         ]);
         if (isMounted) {
@@ -627,6 +629,7 @@ export default function GameHistoryPage() {
                   >
                     {game.finished ? 'Game Finished' : 'Unfinished'}
                   </div>
+                  {isPodAdmin && (
                   <button
                     type='button'
                     onClick={() => setEditingGameId((currentGameId) => currentGameId === game.id ? null : game.id)}
@@ -635,7 +638,8 @@ export default function GameHistoryPage() {
                   >
                     {editingGameId === game.id ? 'Close edit' : 'Edit game'}
                   </button>
-                  {editingGameId === game.id && (
+                  )}
+                  {isPodAdmin && editingGameId === game.id && (
                     <button
                       type='button'
                       onClick={() => handleGameSave(game.id)}

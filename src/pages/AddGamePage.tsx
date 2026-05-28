@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
+import { usePod } from '../contexts/PodContext';
 import { CommanderAutocomplete } from '../components/CommanderAutocomplete';
 import {
   createGameWithParticipants,
@@ -116,6 +117,7 @@ export default function AddGamePage() {
     },
   });
   const navigate = useNavigate();
+  const { activePodId, isPodAdmin } = usePod();
   const [participants, setParticipants] = useState<ParticipantInput[]>(() => Array.from({ length: 4 }, (_, index) => createParticipantSeat(index + 1)));
   const [playerSuggestions, setPlayerSuggestions] = useState<AddGamePlayerSuggestion[]>([]);
   const [winConditionSuggestions, setWinConditionSuggestions] = useState<string[]>([]);
@@ -307,7 +309,10 @@ export default function AddGamePage() {
         throw new Error('Please choose a win condition before saving');
       }
 
+      if (!activePodId) throw new Error('No active pod selected');
+
       await createGameWithParticipants({
+        podId: activePodId,
         playedAt: formData.playedAt,
         playersCount: parseInt(formData.playersCount, 10),
         bracket: parseInt(formData.bracket, 10),
@@ -338,6 +343,14 @@ export default function AddGamePage() {
       setIsLoading(false);
     }
   };
+
+  if (!isPodAdmin) {
+    return (
+      <section className='wireframe-shell'>
+        <p className='wireframe-copy'>Only pod admins can add games.</p>
+      </section>
+    );
+  }
 
   return (
     <section className='wireframe-shell px-5 py-6 md:px-8 md:py-7'>

@@ -1,7 +1,8 @@
-import { useDeferredValue, useEffect, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchPlayerDirectory, fetchPlayerPageSummary, type PlayerDirectoryEntry, type PlayerPageSummary } from '../lib/gameRecords';
+import { fetchPlayerDirectory, type PlayerDirectoryEntry, type PlayerPageSummary } from '../lib/gameRecords';
 import { getScryfallSearchUrl } from '../lib/scryfall';
+import { usePod } from '../contexts/PodContext';
 
 function formatPlayedAt(value: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -23,15 +24,51 @@ const EMPTY_PLAYER_SUMMARY: PlayerPageSummary = {
   highestCommanderWinRate: null,
 };
 
+function computeSummary(players: PlayerDirectoryEntry[]): PlayerPageSummary {
+  const commanderMap = new Map<string, number>();
+  for (const player of players) {
+    for (const commander of player.commanders) {
+      commanderMap.set(commander.name, (commanderMap.get(commander.name) ?? 0) + commander.appearances);
+    }
+  }
+
+  let mostPopularCommander: PlayerPageSummary['mostPopularCommander'] = null;
+  for (const [name, appearances] of commanderMap) {
+    if (!mostPopularCommander || appearances > mostPopularCommander.appearances) {
+      mostPopularCommander = { name, appearances };
+    }
+  }
+
+  const mostGames = players.reduce<PlayerDirectoryEntry | null>(
+    (best, p) => (!best || p.gamesPlayed > best.gamesPlayed ? p : best), null
+  );
+  const highestWinRate = players.filter((p) => p.gamesPlayed > 0).reduce<PlayerDirectoryEntry | null>(
+    (best, p) => (!best || p.winRate > best.winRate || (p.winRate === best.winRate && p.wins > best.wins) ? p : best), null
+  );
+
+  return {
+    totalPlayers: players.length,
+    totalWins: players.reduce((sum, p) => sum + p.wins, 0),
+    totalCommanders: commanderMap.size,
+    mostGamesPlayer: mostGames ? { name: mostGames.name, gamesPlayed: mostGames.gamesPlayed } : null,
+    highestWinRatePlayer: highestWinRate
+      ? { name: highestWinRate.name, gamesPlayed: highestWinRate.gamesPlayed, wins: highestWinRate.wins, winRate: highestWinRate.winRate }
+      : null,
+    mostPopularCommander,
+    highestCommanderWinRate: null,
+  };
+}
+
 export default function PlayersPage() {
   const navigate = useNavigate();
+  const { activePodId } = usePod();
   const [searchParams, setSearchParams] = useSearchParams();
   const [players, setPlayers] = useState<PlayerDirectoryEntry[]>([]);
-  const [summary, setSummary] = useState<PlayerPageSummary>(EMPTY_PLAYER_SUMMARY);
   const [searchValue, setSearchValue] = useState(searchParams.get('player') ?? '');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const deferredSearchValue = useDeferredValue(searchValue.trim());
+  const summary = useMemo(() => computeSummary(players), [players]);
 
   useEffect(() => {
     setSearchValue(searchParams.get('player') ?? '');
@@ -57,6 +94,12 @@ export default function PlayersPage() {
   };
 
   useEffect(() => {
+    if (!activePodId) {
+      setIsLoading(false);
+      setPlayers([]);
+      return;
+    }
+
     let isMounted = true;
 
     async function loadPlayers() {
@@ -64,13 +107,9 @@ export default function PlayersPage() {
         setIsLoading(true);
         setError(null);
 
-        const [nextPlayers, nextSummary] = await Promise.all([
-          fetchPlayerDirectory(),
-          fetchPlayerPageSummary(),
-        ]);
+        const nextPlayers = await fetchPlayerDirectory(activePodId!);
         if (isMounted) {
           setPlayers(nextPlayers);
-          setSummary(nextSummary);
         }
       } catch (err) {
         if (isMounted) {
@@ -88,7 +127,7 @@ export default function PlayersPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [activePodId]);
 
   const filteredPlayers = deferredSearchValue
     ? players.filter((player) => {

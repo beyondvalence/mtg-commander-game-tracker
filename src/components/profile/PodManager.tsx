@@ -43,7 +43,10 @@ export function PodManager() {
       setActivePodId(podId);
       setCreateName('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create pod');
+      const raw = JSON.stringify(e) + String((e as any)?.message ?? '');
+      setError(raw.includes('pod_creation_disabled')
+        ? 'Pod creation is currently disabled.'
+        : (e as any)?.message || 'Failed to create pod');
     } finally {
       setIsCreating(false);
     }

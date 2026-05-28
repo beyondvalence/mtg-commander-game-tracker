@@ -69,6 +69,7 @@ Copy `.env.example` to `.env`, fill in:
 - `<datalist>` for player rename suggestions in history page lives at the top of the JSX, outside all `overflow-hidden`/`overflow-x-auto` containers, so browser anchors the popup correctly to whichever input is active.
 - Public signup is open in the UI by default; Supabase Dashboard Auth settings control whether email confirmation is required and whether signup is restricted.
 - History and Players filters are URL-backed client-side filters, not server-filtered queries.
+- `resolveInitialTheme()` in `src/lib/theme.ts` defaults to `'dark'` (intentional, ignores system `prefers-color-scheme`). Users who want light mode must toggle manually.
 
 ## Ignored Local Files
 

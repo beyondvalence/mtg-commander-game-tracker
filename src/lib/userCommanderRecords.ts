@@ -33,6 +33,22 @@ export async function addUserCommander(commander: {
   imageUrl: string | null;
   colorIdentity: string[];
 }): Promise<void> {
+  if (!commander.scryfallId) {
+    const { data } = await supabase
+      .from('user_commanders')
+      .select('id')
+      .eq('name', commander.name)
+      .limit(1);
+    if (data && data.length > 0) return;
+    const { error } = await supabase.from('user_commanders').insert({
+      name: commander.name,
+      image_url: commander.imageUrl,
+      color_identity: commander.colorIdentity,
+    });
+    if (error) throw error;
+    return;
+  }
+
   const { error } = await supabase
     .from('user_commanders')
     .upsert(
@@ -42,10 +58,7 @@ export async function addUserCommander(commander: {
         image_url: commander.imageUrl,
         color_identity: commander.colorIdentity,
       },
-      {
-        onConflict: commander.scryfallId ? 'user_id,scryfall_id' : undefined,
-        ignoreDuplicates: true,
-      },
+      { onConflict: 'user_id,scryfall_id', ignoreDuplicates: true },
     );
 
   if (error) throw error;

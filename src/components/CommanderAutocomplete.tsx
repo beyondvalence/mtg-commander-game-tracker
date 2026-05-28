@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { searchBackgrounds, searchCommanders } from '../lib/scryfall';
 import type { CommanderCard } from '../types/app';
 
@@ -29,6 +30,8 @@ export function CommanderAutocomplete({
   const [items, setItems] = useState<CommanderCard[]>([]);
   const [b, setB] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
     setQ(value);
@@ -63,9 +66,52 @@ export function CommanderAutocomplete({
   const hasSuggestions = filteredSuggestedItems.length > 0;
   const showResults = useMemo(() => isOpen && visibleItems.length > 0, [isOpen, visibleItems.length]);
 
+  useEffect(() => {
+    if (showResults && inputRef.current) {
+      const r = inputRef.current.getBoundingClientRect();
+      setDropdownRect({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
+  }, [showResults]);
+
+  const dropdown = showResults && dropdownRect
+    ? createPortal(
+        <div
+          className='app-card z-50 max-h-72 overflow-auto shadow-xl'
+          style={{ position: 'fixed', top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width }}
+        >
+          {hasSuggestions && (
+            <p className='app-muted px-2 pb-1 text-xs font-semibold uppercase tracking-[0.15em]'>
+              Played by this player
+            </p>
+          )}
+          {visibleItems.map((i, index) => (
+            <button
+              type='button'
+              key={`${i.scryfallId}-${index}`}
+              className='flex w-full items-center gap-2 rounded-lg p-2 text-left transition hover:bg-[var(--app-panel-soft)]'
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onSelect(i);
+                setQ(i.name);
+                setIsOpen(false);
+              }}
+            >
+              {i.imageUrl ? <img src={i.imageUrl} alt={i.name} className='h-10 w-7 rounded object-cover' /> : null}
+              <div className='min-w-0'>
+                <span className='block truncate'>{i.name}</span>
+                {index < filteredSuggestedItems.length && <span className='app-muted block text-xs'>From saved games</span>}
+              </div>
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )
+    : null;
+
   return (
     <div className='relative'>
       <input
+        ref={inputRef}
         className='app-input-compact'
         value={q}
         onFocus={() => setIsOpen(true)}
@@ -93,35 +139,7 @@ export function CommanderAutocomplete({
         placeholder={placeholder}
       />
       {b && <p className='text-xs text-amber-600'>Broadened results</p>}
-
-      {showResults && (
-        <div className='app-card absolute z-20 mt-1 max-h-72 w-full overflow-auto shadow-xl'>
-          {hasSuggestions && (
-            <p className='app-muted px-2 pb-1 text-xs font-semibold uppercase tracking-[0.15em]'>
-              Played by this player
-            </p>
-          )}
-          {visibleItems.map((i, index) => (
-            <button
-              type='button'
-              key={`${i.scryfallId}-${index}`}
-              className='flex w-full items-center gap-2 rounded-lg p-2 text-left transition hover:bg-[var(--app-panel-soft)]'
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onSelect(i);
-                setQ(i.name);
-                setIsOpen(false);
-              }}
-            >
-              {i.imageUrl ? <img src={i.imageUrl} alt={i.name} className='h-10 w-7 rounded object-cover' /> : null}
-              <div className='min-w-0'>
-                <span className='block truncate'>{i.name}</span>
-                {index < filteredSuggestedItems.length && <span className='app-muted block text-xs'>From saved games</span>}
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }

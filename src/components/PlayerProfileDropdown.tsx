@@ -117,8 +117,8 @@ function AccountTab() {
           const playerData = await fetchPlayerById(playerId);
           if (isMounted) setPlayer(playerData);
         } else {
-          const { data } = await supabase.from('players').select('name').order('name');
-          if (isMounted) setPlayerNames((data ?? []).map((p: { name: string }) => p.name));
+          const { data } = await supabase.from('players').select('display_name').order('display_name');
+          if (isMounted) setPlayerNames((data ?? []).map((p: { display_name: string }) => p.display_name));
         }
       } catch {
         // silent — not critical
@@ -161,7 +161,7 @@ function AccountTab() {
       ) : player ? (
         <div>
           <p className='app-muted text-xs font-semibold uppercase tracking-[0.15em]'>Linked Player</p>
-          <p className='mt-1 text-sm font-semibold'>{player.name}</p>
+          <p className='mt-1 text-sm font-semibold'>{player.displayName}</p>
           <p className='app-muted mt-0.5 text-xs'>{player.gamesPlayed} games · {Math.round(player.winRate * 100)}% win rate</p>
           <button
             type='button'

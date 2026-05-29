@@ -297,7 +297,7 @@ export default function GameHistoryPage() {
                     ...participant,
                     is_winner: participant.id === nextWinnerParticipantId,
                     killed_first: nextKilledFirstIds.includes(participant.id),
-                    player: newName && playerObj ? { ...playerObj, name: newName } : participant.player,
+                    player: newName && playerObj ? { ...playerObj, display_name: newName } : participant.player,
                   };
                 }),
               }

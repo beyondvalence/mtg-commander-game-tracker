@@ -8,7 +8,7 @@ export type HistoryGameParticipant = {
   turn_order_position: number;
   is_winner: boolean;
   killed_first: boolean;
-  player: { id: string; name: string } | { id: string; name: string }[] | null;
+  player: { id: string; display_name: string } | { id: string; display_name: string }[] | null;
   primary_commander: { name: string; image_url: string | null } | { name: string; image_url: string | null }[] | null;
   secondary_commander: { name: string; image_url: string | null } | { name: string; image_url: string | null }[] | null;
 };
@@ -33,7 +33,7 @@ export type NumberedHistoryGame = HistoryGame & {
 
 export type PlayerDirectoryEntry = {
   id: string;
-  name: string;
+  displayName: string;
   gamesPlayed: number;
   wins: number;
   winRate: number;
@@ -67,7 +67,7 @@ type CommanderRow = {
 
 export type AddGamePlayerSuggestion = {
   id: string;
-  name: string;
+  displayName: string;
   commanders: Array<
     CommanderCard & {
       appearances: number;
@@ -94,7 +94,7 @@ type HistoryGameParticipantRow = HistoryGameParticipant & {
 
 type PlayerDirectoryRow = {
   id: string;
-  name: string;
+  display_name: string;
   games_played: number;
   wins: number;
   win_rate: number;
@@ -163,7 +163,7 @@ function parsePlayerCommanders(value: unknown): PlayerDirectoryEntry['commanders
 function toPlayerDirectoryEntry(row: PlayerDirectoryRow): PlayerDirectoryEntry {
   return {
     id: row.id,
-    name: row.name,
+    displayName: row.display_name,
     gamesPlayed: row.games_played,
     wins: row.wins,
     winRate: row.win_rate,
@@ -219,7 +219,7 @@ async function fetchParticipantsForGames(gameIds: string[] | null) {
       killed_first,
       player:players (
         id,
-        name
+        display_name
       ),
       primary_commander:commanders!game_participants_primary_commander_id_fkey (
         name,
@@ -367,11 +367,11 @@ export async function fetchPlayerDirectory(podId: string) {
 
   const { data, error } = await supabase
     .from('player_directory_entries')
-    .select('id, name, games_played, wins, win_rate, latest_played_at, latest_game_number, commanders')
+    .select('id, display_name, games_played, wins, win_rate, latest_played_at, latest_game_number, commanders')
     .in('id', playerIds)
     .order('wins', { ascending: false })
     .order('games_played', { ascending: false })
-    .order('name', { ascending: true });
+    .order('display_name', { ascending: true });
 
   if (error) throw error;
 
@@ -410,14 +410,37 @@ function toCommanderCardSuggestion(commander: CommanderRow): CommanderCard {
   };
 }
 
-export async function fetchAddGamePlayerSuggestions() {
-  const { data, error } = await supabase
+export async function fetchAddGamePlayerSuggestions(podId: string): Promise<AddGamePlayerSuggestion[]> {
+  const { data: members, error: membersError } = await supabase
+    .from('pod_members')
+    .select('user_id')
+    .eq('pod_id', podId);
+
+  if (membersError) throw membersError;
+
+  const memberUserIds = (members ?? []).map((m) => (m as { user_id: string }).user_id);
+  if (memberUserIds.length === 0) return [];
+
+  const { data: players, error: playersError } = await supabase
+    .from('players')
+    .select('id, display_name')
+    .in('linked_user_id', memberUserIds);
+
+  if (playersError) throw playersError;
+
+  const podPlayers = (players ?? []) as Array<{ id: string; display_name: string }>;
+  if (podPlayers.length === 0) return [];
+
+  const playerMap = new Map<string, AddGamePlayerSuggestion>(
+    podPlayers.map((p) => [p.id, { id: p.id, displayName: p.display_name, commanders: [] }]),
+  );
+
+  const playerIds = podPlayers.map((p) => p.id);
+
+  const { data: participantData, error: partError } = await supabase
     .from('game_participants')
     .select(`
-      player:players (
-        id,
-        name
-      ),
+      player_id,
       primary_commander:commanders!game_participants_primary_commander_id_fkey (
         scryfall_id,
         name,
@@ -434,65 +457,37 @@ export async function fetchAddGamePlayerSuggestions() {
         type_line,
         oracle_text
       )
-    `);
+    `)
+    .eq('pod_id', podId)
+    .in('player_id', playerIds);
 
-  if (error) {
-    throw error;
-  }
+  if (partError) throw partError;
 
-  const playerMap = new Map<string, AddGamePlayerSuggestion>();
+  for (const participant of participantData ?? []) {
+    const playerId = (participant as { player_id: string }).player_id;
+    const entry = playerMap.get(playerId);
+    if (!entry) continue;
 
-  for (const participant of data ?? []) {
-    const player = Array.isArray(participant.player) ? participant.player[0] : participant.player;
     const primaryCommander = Array.isArray(participant.primary_commander) ? participant.primary_commander[0] : participant.primary_commander;
     const secondaryCommander = Array.isArray(participant.secondary_commander) ? participant.secondary_commander[0] : participant.secondary_commander;
 
-    if (!player) {
-      continue;
-    }
-
-    const existingPlayer: AddGamePlayerSuggestion = playerMap.get(player.id) ?? {
-      id: player.id,
-      name: player.name,
-      commanders: [],
-    };
-
-    const commanderMap = new Map(existingPlayer.commanders.map((commander) => [commander.scryfallId || commander.name, commander]));
+    const commanderMap = new Map(entry.commanders.map((c) => [c.scryfallId || c.name, c]));
 
     for (const commander of [primaryCommander, secondaryCommander] as Array<CommanderRow | null | undefined>) {
-      if (!commander) {
-        continue;
-      }
+      if (!commander) continue;
 
       const key = commander.scryfall_id ?? commander.name;
-      const existingCommander = commanderMap.get(key);
-      if (existingCommander) {
-        existingCommander.appearances += 1;
-        if (!existingCommander.imageUrl && commander.image_url) {
-          existingCommander.imageUrl = commander.image_url;
+      const existing = commanderMap.get(key);
+      if (existing) {
+        existing.appearances += 1;
+        if (!existing.imageUrl && commander.image_url) {
+          existing.imageUrl = commander.image_url;
         }
       } else {
-        const nextCommander = {
-          ...toCommanderCardSuggestion(commander),
-          appearances: 1,
-        };
-        existingPlayer.commanders.push(nextCommander);
-        commanderMap.set(key, nextCommander);
+        const next = { ...toCommanderCardSuggestion(commander), appearances: 1 };
+        entry.commanders.push(next);
+        commanderMap.set(key, next);
       }
-    }
-
-    playerMap.set(player.id, existingPlayer);
-  }
-
-  const { data: standalonePlayers, error: standaloneError } = await supabase
-    .from('players')
-    .select('id, name');
-
-  if (standaloneError) throw standaloneError;
-
-  for (const p of (standalonePlayers as Array<{ id: string; name: string }> | null) ?? []) {
-    if (!playerMap.has(p.id)) {
-      playerMap.set(p.id, { id: p.id, name: p.name, commanders: [] });
     }
   }
 
@@ -500,14 +495,11 @@ export async function fetchAddGamePlayerSuggestions() {
     .map((player) => ({
       ...player,
       commanders: [...player.commanders].sort((left, right) => {
-        if (right.appearances !== left.appearances) {
-          return right.appearances - left.appearances;
-        }
-
+        if (right.appearances !== left.appearances) return right.appearances - left.appearances;
         return left.name.localeCompare(right.name);
       }),
     }))
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .sort((left, right) => left.displayName.localeCompare(right.displayName));
 }
 
 export async function setGameWinner(gameId: string, winnerParticipantId: string | null) {
@@ -600,30 +592,18 @@ export async function updateProfilePlayerId(playerId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function createOrLinkPlayer(name: string): Promise<string> {
-  const trimmedName = name.trim();
-  if (!trimmedName) throw new Error('Player name cannot be empty');
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const { data, error } = await supabase
-    .from('players')
-    .upsert({ user_id: user.id, name: trimmedName }, { onConflict: 'user_id,name', ignoreDuplicates: false })
-    .select('id')
-    .single();
-
+export async function createOrLinkPlayer(displayName: string): Promise<string> {
+  const { data, error } = await supabase.rpc('update_player_display_name', {
+    p_new_display_name: displayName,
+  });
   if (error) throw error;
-
-  const playerId = (data as { id: string }).id;
-  await updateProfilePlayerId(playerId);
-  return playerId;
+  return data as string;
 }
 
 export async function fetchPlayerById(playerId: string): Promise<PlayerDirectoryEntry> {
   const { data, error } = await supabase
     .from('player_directory_entries')
-    .select('id, name, games_played, wins, win_rate, latest_played_at, latest_game_number, commanders')
+    .select('id, display_name, games_played, wins, win_rate, latest_played_at, latest_game_number, commanders')
     .eq('id', playerId)
     .maybeSingle();
 
@@ -633,14 +613,14 @@ export async function fetchPlayerById(playerId: string): Promise<PlayerDirectory
 
   const { data: player, error: playerError } = await supabase
     .from('players')
-    .select('id, name')
+    .select('id, display_name')
     .eq('id', playerId)
     .single();
 
   if (playerError) throw playerError;
 
-  const p = player as { id: string; name: string };
-  return { id: p.id, name: p.name, gamesPlayed: 0, wins: 0, winRate: 0, latestPlayedAt: '', latestGameNumber: 0, commanders: [] };
+  const p = player as { id: string; display_name: string };
+  return { id: p.id, displayName: p.display_name, gamesPlayed: 0, wins: 0, winRate: 0, latestPlayedAt: '', latestGameNumber: 0, commanders: [] };
 }
 
 export async function fetchPlayerRecentGames(playerId: string, limit: number): Promise<NumberedHistoryGame[]> {
@@ -690,22 +670,19 @@ export async function fetchPlayerRecentGames(playerId: string, limit: number): P
 export async function relinkParticipantPlayer(
   participantId: string,
   gameId: string,
-  newPlayerName: string,
+  newDisplayName: string,
 ): Promise<void> {
   const { error } = await supabase.rpc('relink_participant_player', {
     p_participant_id: participantId,
     p_game_id: gameId,
-    p_new_player_name: newPlayerName,
+    p_new_display_name: newDisplayName,
   });
   if (error) throw error;
 }
 
-export function readSingleName(value: { name: string } | { name: string }[] | null) {
-  if (Array.isArray(value)) {
-    return value[0]?.name ?? 'Unknown';
-  }
-
-  return value?.name ?? 'Unknown';
+export function readSingleName(value: { name?: string; display_name?: string } | { name?: string; display_name?: string }[] | null) {
+  const obj = Array.isArray(value) ? value[0] : value;
+  return obj?.display_name ?? obj?.name ?? 'Unknown';
 }
 
 export function readSingleCommander(

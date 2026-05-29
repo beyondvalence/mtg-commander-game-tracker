@@ -64,10 +64,10 @@ export default function MyProfilePage() {
             setRecentGames(games);
           }
         } else {
-          const { data } = await supabase.from('players').select('name').order('name');
+          const { data } = await supabase.from('players').select('display_name').order('display_name');
           if (isMounted) {
             setProfilePlayerId(null);
-            setPlayerNames((data ?? []).map((p: { name: string }) => p.name));
+            setPlayerNames((data ?? []).map((p: { display_name: string }) => p.display_name));
           }
         }
       } catch (err) {
@@ -117,7 +117,7 @@ export default function MyProfilePage() {
   };
 
   const handleStartChange = () => {
-    setNameInput(player?.name ?? '');
+    setNameInput(player?.displayName ?? '');
     setIsChanging(true);
   };
 
@@ -139,8 +139,8 @@ export default function MyProfilePage() {
           <h1 className='wireframe-title'>My Profile</h1>
           <p className='app-muted mt-2 text-sm'>
             {isChanging
-              ? 'Enter a different name to change your player identity.'
-              : 'Enter your name to set up your profile. It will appear as an autocomplete option when adding games.'}
+              ? 'Enter a different display name to change your player identity.'
+              : 'Enter your display name to set up your profile. It will appear as an autocomplete option when adding games.'}
           </p>
 
           <form onSubmit={handleLinkPlayer} className='mt-6 flex max-w-md flex-col gap-3'>
@@ -156,7 +156,7 @@ export default function MyProfilePage() {
               list='me-player-name-suggestions'
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
-              placeholder='Your name'
+              placeholder='Your display name'
               autoComplete='off'
               disabled={isSaving}
               className='app-input h-14 text-base md:text-lg'
@@ -188,7 +188,7 @@ export default function MyProfilePage() {
       {showProfile && player && (
         <>
           <div>
-            <h1 className='wireframe-title'>{player.name}</h1>
+            <h1 className='wireframe-title'>{player.displayName}</h1>
             <button
               type='button'
               onClick={handleStartChange}

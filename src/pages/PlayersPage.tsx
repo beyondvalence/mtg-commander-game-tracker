@@ -50,9 +50,9 @@ function computeSummary(players: PlayerDirectoryEntry[]): PlayerPageSummary {
     totalPlayers: players.length,
     totalWins: players.reduce((sum, p) => sum + p.wins, 0),
     totalCommanders: commanderMap.size,
-    mostGamesPlayer: mostGames ? { name: mostGames.name, gamesPlayed: mostGames.gamesPlayed } : null,
+    mostGamesPlayer: mostGames ? { name: mostGames.displayName, gamesPlayed: mostGames.gamesPlayed } : null,
     highestWinRatePlayer: highestWinRate
-      ? { name: highestWinRate.name, gamesPlayed: highestWinRate.gamesPlayed, wins: highestWinRate.wins, winRate: highestWinRate.winRate }
+      ? { name: highestWinRate.displayName, gamesPlayed: highestWinRate.gamesPlayed, wins: highestWinRate.wins, winRate: highestWinRate.winRate }
       : null,
     mostPopularCommander,
     highestCommanderWinRate: null,
@@ -133,7 +133,7 @@ export default function PlayersPage() {
     ? players.filter((player) => {
         const needle = deferredSearchValue.toLowerCase();
         const commanderNames = player.commanders.map((commander) => commander.name).join(' ').toLowerCase();
-        return player.name.toLowerCase().includes(needle) || commanderNames.includes(needle);
+        return player.displayName.toLowerCase().includes(needle) || commanderNames.includes(needle);
       })
     : players;
 
@@ -248,10 +248,10 @@ export default function PlayersPage() {
                 <div className='space-y-1'>
                   <button
                     type='button'
-                    onClick={() => navigate(`/history?player=${encodeURIComponent(player.name)}`)}
+                    onClick={() => navigate(`/history?player=${encodeURIComponent(player.displayName)}`)}
                     className='text-left text-2xl font-semibold transition hover:opacity-75'
                   >
-                    {player.name}
+                    {player.displayName}
                   </button>
                   <p className='app-muted text-sm'>
                     Last seen in Game #{player.latestGameNumber} on {formatPlayedAt(player.latestPlayedAt)}

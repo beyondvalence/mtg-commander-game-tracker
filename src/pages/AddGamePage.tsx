@@ -151,29 +151,24 @@ export default function AddGamePage() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadPlayerSuggestions() {
-      try {
-        const [nextSuggestions, nextWinConditions] = await Promise.all([
-          fetchAddGamePlayerSuggestions(),
-          fetchWinConditionSuggestions(),
-        ]);
-        if (isMounted) {
-          setPlayerSuggestions(nextSuggestions);
-          setWinConditionSuggestions(nextWinConditions);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Failed to load player suggestions');
-        }
-      }
-    }
+    fetchWinConditionSuggestions()
+      .then((next) => { if (isMounted) setWinConditionSuggestions(next); })
+      .catch(() => {});
 
-    loadPlayerSuggestions();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (!activePodId) return;
+
+    let isMounted = true;
+
+    fetchAddGamePlayerSuggestions(activePodId)
+      .then((next) => { if (isMounted) setPlayerSuggestions(next); })
+      .catch((err) => { if (isMounted) setError(err instanceof Error ? err.message : 'Failed to load player suggestions'); });
+
+    return () => { isMounted = false; };
+  }, [activePodId]);
 
   const incompleteFields: string[] = [];
   for (const participant of participants) {
@@ -184,11 +179,11 @@ export default function AddGamePage() {
   if (isAddingCustomWinCondition && !customWinCondition.trim()) incompleteFields.push('Custom win condition text');
 
   const hasIncompleteSeat = participants.some((participant) => !participant.playerName.trim() || !participant.primary);
-  const playerNameOptions = playerSuggestions.map((player) => player.name);
+  const playerNameOptions = playerSuggestions.map((player) => player.displayName);
   const availableWinConditions = [...new Set([...DEFAULT_WIN_CONDITIONS, ...winConditionSuggestions])];
 
   const findMatchingPlayerSuggestion = (playerName: string) =>
-    playerSuggestions.find((player) => normalizePlayerName(player.name) === normalizePlayerName(playerName)) ?? null;
+    playerSuggestions.find((player) => normalizePlayerName(player.displayName) === normalizePlayerName(playerName)) ?? null;
 
   const handlePlayerNameChange = (seat: number, playerName: string) => {
     setParticipants((currentParticipants) =>
@@ -555,7 +550,7 @@ export default function AddGamePage() {
 
                   {matchingPlayer && (
                     <p className='app-muted text-xs'>
-                      Suggestions loaded from {matchingPlayer.name}&apos;s saved game history.
+                      Suggestions loaded from {matchingPlayer.displayName}&apos;s saved game history.
                     </p>
                   )}
 

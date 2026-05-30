@@ -103,6 +103,7 @@ function AccountTab() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -110,15 +111,22 @@ function AccountTab() {
     async function load() {
       try {
         setIsLoading(true);
-        const playerId = await fetchProfilePlayerId();
+        const [playerId, namesResult] = await Promise.all([
+          fetchProfilePlayerId(),
+          supabase.from('players').select('display_name').not('display_name', 'is', null).order('display_name'),
+        ]);
         if (!isMounted) return;
 
         if (playerId) {
           const playerData = await fetchPlayerById(playerId);
           if (isMounted) setPlayer(playerData);
-        } else {
-          const { data } = await supabase.from('players').select('display_name').order('display_name');
-          if (isMounted) setPlayerNames((data ?? []).map((p: { display_name: string }) => p.display_name));
+        }
+        if (isMounted) {
+          setPlayerNames(
+            ((namesResult.data ?? []) as { display_name: string }[])
+              .map((p) => p.display_name)
+              .filter((n): n is string => n !== null),
+          );
         }
       } catch {
         // silent — not critical
@@ -131,6 +139,12 @@ function AccountTab() {
     return () => { isMounted = false; };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
+
   async function handleSave() {
     const name = nameInput.trim();
     if (!name) return;
@@ -140,8 +154,9 @@ function AccountTab() {
       const playerId = await createOrLinkPlayer(name);
       const linked = await fetchPlayerById(playerId);
       setPlayer(linked);
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 2000);
+      successTimerRef.current = setTimeout(() => setSuccess(false), 2000);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to link player');
     } finally {
@@ -166,7 +181,7 @@ function AccountTab() {
           <button
             type='button'
             className='app-muted mt-2 text-xs underline-offset-2 hover:underline'
-            onClick={() => { setPlayer(null); setNameInput(''); }}
+            onClick={() => { setPlayer(null); setNameInput(''); setSuccess(false); setError(null); }}
           >
             Change
           </button>

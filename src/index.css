@@ -644,15 +644,22 @@ body {
   .pod-switcher-button {
     @apply flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-base font-semibold transition md:text-lg;
     background: var(--app-panel);
-    border-color: rgba(110, 231, 183, 0.28);
+    border-color: var(--app-border);
     color: var(--app-muted);
     max-width: 11rem;
   }
 
+  html[data-theme='dark'] .pod-switcher-button {
+    border-color: rgba(110, 231, 183, 0.28);
+  }
+
   .pod-switcher-button:hover {
     background: var(--app-hover);
-    border-color: rgba(134, 239, 172, 0.34);
     color: var(--app-text);
+  }
+
+  html[data-theme='dark'] .pod-switcher-button:hover {
+    border-color: rgba(134, 239, 172, 0.34);
   }
 
   .pod-switcher-label {

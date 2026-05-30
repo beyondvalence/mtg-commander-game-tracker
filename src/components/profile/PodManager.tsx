@@ -176,6 +176,9 @@ export function PodManager() {
                                 {isSelf && <span className='app-muted'> (you)</span>}
                               </p>
                               <p className='app-muted text-xs'>{m.role}</p>
+                              {m.displayName === null && (
+                                <p className='text-xs text-amber-600'>Display name not set</p>
+                              )}
                             </div>
                             {userIsAdmin && !isSelf && (
                               <div className='flex shrink-0 gap-1'>

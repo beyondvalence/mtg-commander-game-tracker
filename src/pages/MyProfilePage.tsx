@@ -137,10 +137,15 @@ export default function MyProfilePage() {
       {showNameForm && (
         <div>
           <h1 className='wireframe-title'>My Profile</h1>
+          {!isChanging && (
+            <p className='mt-2 text-sm text-amber-600'>
+              Display name not set — you won't appear as a player option when adding games to your pod.
+            </p>
+          )}
           <p className='app-muted mt-2 text-sm'>
             {isChanging
               ? 'Enter a different display name to change your player identity.'
-              : 'Enter your display name to set up your profile. It will appear as an autocomplete option when adding games.'}
+              : 'Enter your display name to set up your profile.'}
           </p>
 
           <form onSubmit={handleLinkPlayer} className='mt-6 flex max-w-md flex-col gap-3'>

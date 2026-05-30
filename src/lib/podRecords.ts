@@ -13,6 +13,7 @@ export type PodMember = {
   email: string | null;
   role: 'admin' | 'member';
   joinedAt: string;
+  displayName: string | null;
 };
 
 export async function getUserPods(): Promise<Pod[]> {
@@ -73,7 +74,7 @@ export async function demotePodMember(podId: string, targetUserId: string): Prom
 export async function getPodMembers(podId: string): Promise<PodMember[]> {
   const { data, error } = await supabase
     .from('pod_members')
-    .select('user_id, role, joined_at, profiles(email)')
+    .select('user_id, role, joined_at, profiles(email, player_id, players(display_name))')
     .eq('pod_id', podId)
     .order('joined_at', { ascending: true });
 
@@ -81,11 +82,15 @@ export async function getPodMembers(podId: string): Promise<PodMember[]> {
 
   return (data ?? []).map((row) => {
     const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+    const playerData = profile?.players
+      ? (Array.isArray(profile.players) ? profile.players[0] : profile.players)
+      : null;
     return {
       userId: row.user_id,
       email: profile?.email ?? null,
       role: row.role as 'admin' | 'member',
       joinedAt: row.joined_at,
+      displayName: (playerData as { display_name?: string | null } | null)?.display_name ?? null,
     };
   });
 }

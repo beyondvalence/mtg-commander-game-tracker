@@ -170,9 +170,16 @@ export default function AddGamePage() {
     return () => { isMounted = false; };
   }, [activePodId]);
 
+  const findMatchingPlayerSuggestion = (playerName: string) =>
+    playerSuggestions.find((player) => normalizePlayerName(player.displayName) === normalizePlayerName(playerName)) ?? null;
+
   const incompleteFields: string[] = [];
   for (const participant of participants) {
-    if (!participant.playerName.trim()) incompleteFields.push(`Seat ${participant.seat}: player name`);
+    if (!participant.playerName.trim()) {
+      incompleteFields.push(`Seat ${participant.seat}: player name`);
+    } else if (playerSuggestions.length > 0 && !findMatchingPlayerSuggestion(participant.playerName.trim())) {
+      incompleteFields.push(`Seat ${participant.seat}: player not in pod`);
+    }
     if (!participant.primary) incompleteFields.push(`Seat ${participant.seat}: commander`);
   }
   if (finishedGame && !winCondition) incompleteFields.push('Win condition');
@@ -181,9 +188,6 @@ export default function AddGamePage() {
   const hasIncompleteSeat = participants.some((participant) => !participant.playerName.trim() || !participant.primary);
   const playerNameOptions = playerSuggestions.map((player) => player.displayName);
   const availableWinConditions = [...new Set([...DEFAULT_WIN_CONDITIONS, ...winConditionSuggestions])];
-
-  const findMatchingPlayerSuggestion = (playerName: string) =>
-    playerSuggestions.find((player) => normalizePlayerName(player.displayName) === normalizePlayerName(playerName)) ?? null;
 
   const handlePlayerNameChange = (seat: number, playerName: string) => {
     setParticipants((currentParticipants) =>

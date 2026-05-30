@@ -642,15 +642,16 @@ body {
   }
 
   .pod-switcher-button {
-    @apply flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-sm font-semibold transition;
+    @apply flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-base font-semibold transition md:text-lg;
     background: var(--app-panel);
-    border-color: var(--app-border);
+    border-color: rgba(110, 231, 183, 0.28);
     color: var(--app-muted);
     max-width: 11rem;
   }
 
   .pod-switcher-button:hover {
     background: var(--app-hover);
+    border-color: rgba(134, 239, 172, 0.34);
     color: var(--app-text);
   }
 

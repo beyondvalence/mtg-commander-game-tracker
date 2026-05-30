@@ -160,7 +160,7 @@ function AccountTab() {
         <p className='app-muted text-sm'>Loading...</p>
       ) : player ? (
         <div>
-          <p className='app-muted text-xs font-semibold uppercase tracking-[0.15em]'>Linked Player</p>
+          <p className='app-muted text-xs font-semibold uppercase tracking-[0.15em]'>Display Name</p>
           <p className='mt-1 text-sm font-semibold'>{player.displayName}</p>
           <p className='app-muted mt-0.5 text-xs'>{player.gamesPlayed} games · {Math.round(player.winRate * 100)}% win rate</p>
           <button
@@ -168,12 +168,12 @@ function AccountTab() {
             className='app-muted mt-2 text-xs underline-offset-2 hover:underline'
             onClick={() => { setPlayer(null); setNameInput(''); }}
           >
-            Change player
+            Change
           </button>
         </div>
       ) : (
         <div className='space-y-2'>
-          <p className='app-muted text-xs font-semibold uppercase tracking-[0.15em]'>Link Player Identity</p>
+          <p className='app-muted text-xs font-semibold uppercase tracking-[0.15em]'>Display Name</p>
           <datalist id='account-player-names'>
             {playerNames.map((n) => <option key={n} value={n} />)}
           </datalist>
@@ -183,18 +183,18 @@ function AccountTab() {
             list='account-player-names'
             onChange={(e) => setNameInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-            placeholder='Your player name'
+            placeholder='Your display name'
             className='app-input-compact w-full'
           />
           {error && <p className='text-xs text-red-600'>{error}</p>}
-          {success && <p className='text-xs text-green-600'>Linked!</p>}
+          {success && <p className='text-xs text-green-600'>Saved!</p>}
           <button
             type='button'
             className='logout-button w-full text-sm'
             onClick={handleSave}
             disabled={!nameInput.trim() || isSaving}
           >
-            {isSaving ? 'Saving...' : 'Link'}
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
       )}

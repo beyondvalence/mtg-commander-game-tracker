@@ -94,6 +94,6 @@ Copy `.env.example` to `.env`, fill in:
 
 - Enable Supabase Auth leaked password protection in Dashboard.
 - ~~Phase C: enforce display_name set before pod game creation (guard in `create_game_with_participants`).~~ Done.
-- Phase D: display_name collision detection within a pod (two members, same name).
+- ~~Phase D: display_name collision detection within a pod (two members, same name).~~ Done.
 - Phase E: show "display name not set" warning in pod member list and `/me`.
 - Join pod flow: redirect to home page with a modal confirmation showing the pod name and Join / Cancel buttons (instead of landing on a separate join page).

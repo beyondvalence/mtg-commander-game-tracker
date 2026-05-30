@@ -120,7 +120,7 @@ export async function fetchWinConditionSuggestions() {
     .not('win_condition', 'is', null);
 
   if (error) {
-    throw error;
+    throw new Error(error.message);
   }
 
   return [...new Set((data ?? []).map((row) => row.win_condition?.trim()).filter((value): value is string => Boolean(value)))]
@@ -243,7 +243,7 @@ async function fetchParticipantsForGames(gameIds: string[] | null) {
   const { data, error } = await participantsQuery;
 
   if (error) {
-    throw error;
+    throw new Error(error.message);
   }
 
   const participantsByGame = new Map<string, HistoryGameParticipant[]>();
@@ -298,7 +298,7 @@ export async function fetchNumberedGames(options: { limit?: number; podId?: stri
   const { data, error } = await gamesQuery;
 
   if (error) {
-    throw error;
+    throw new Error(error.message);
   }
 
   const gameRows = (data as NumberedGameRow[] | null) ?? [];
@@ -338,8 +338,8 @@ export async function fetchDashboardSnapshot(podId: string) {
     fetchNumberedGames({ limit: 3, podId }),
   ]);
 
-  if (gamesResult.error) throw gamesResult.error;
-  if (participantsResult.error) throw participantsResult.error;
+  if (gamesResult.error) throw new Error(gamesResult.error.message);
+  if (participantsResult.error) throw new Error(participantsResult.error.message);
 
   const participants = participantsResult.data ?? [];
   const totalPlayers = new Set(participants.map((p) => p.player_id)).size;
@@ -360,7 +360,7 @@ export async function fetchPlayerDirectory(podId: string) {
     .select('player_id')
     .eq('pod_id', podId);
 
-  if (pErr) throw pErr;
+  if (pErr) throw new Error(pErr.message);
 
   const playerIds = [...new Set((participants ?? []).map((p) => p.player_id))];
   if (playerIds.length === 0) return [];
@@ -373,7 +373,7 @@ export async function fetchPlayerDirectory(podId: string) {
     .order('games_played', { ascending: false })
     .order('display_name', { ascending: true });
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 
   return ((data as PlayerDirectoryRow[] | null) ?? []).map(toPlayerDirectoryEntry);
 }
@@ -393,7 +393,7 @@ export async function fetchPlayerPageSummary() {
     .single();
 
   if (error) {
-    throw error;
+    throw new Error(error.message);
   }
 
   return toPlayerPageSummary(data as PlayerPageSummaryRow | null);
@@ -416,7 +416,7 @@ export async function fetchAddGamePlayerSuggestions(podId: string): Promise<AddG
     .select('user_id')
     .eq('pod_id', podId);
 
-  if (membersError) throw membersError;
+  if (membersError) throw new Error(membersError.message);
 
   const memberUserIds = (members ?? []).map((m) => (m as { user_id: string }).user_id);
   if (memberUserIds.length === 0) return [];
@@ -426,7 +426,7 @@ export async function fetchAddGamePlayerSuggestions(podId: string): Promise<AddG
     .select('id, display_name')
     .in('linked_user_id', memberUserIds);
 
-  if (playersError) throw playersError;
+  if (playersError) throw new Error(playersError.message);
 
   const podPlayers = (players ?? []) as Array<{ id: string; display_name: string }>;
   if (podPlayers.length === 0) return [];
@@ -461,7 +461,7 @@ export async function fetchAddGamePlayerSuggestions(podId: string): Promise<AddG
     .eq('pod_id', podId)
     .in('player_id', playerIds);
 
-  if (partError) throw partError;
+  if (partError) throw new Error(partError.message);
 
   for (const participant of participantData ?? []) {
     const playerId = (participant as { player_id: string }).player_id;
@@ -509,7 +509,7 @@ export async function setGameWinner(gameId: string, winnerParticipantId: string 
   });
 
   if (error) {
-    throw error;
+    throw new Error(error.message);
   }
 }
 
@@ -560,7 +560,7 @@ export async function createGameWithParticipants(input: {
   });
 
   if (error) {
-    throw error;
+    throw new Error(error.message);
   }
 
   return data;
@@ -574,7 +574,7 @@ export async function fetchProfilePlayerId(): Promise<string | null> {
 
   if (error) {
     if (error.code === 'PGRST116') return null;
-    throw error;
+    throw new Error(error.message);
   }
 
   return (data as { player_id: string | null } | null)?.player_id ?? null;
@@ -589,14 +589,14 @@ export async function updateProfilePlayerId(playerId: string): Promise<void> {
     .update({ player_id: playerId })
     .eq('id', user.id);
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 export async function createOrLinkPlayer(displayName: string): Promise<string> {
   const { data, error } = await supabase.rpc('update_player_display_name', {
     p_new_display_name: displayName,
   });
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data as string;
 }
 
@@ -607,7 +607,7 @@ export async function fetchPlayerById(playerId: string): Promise<PlayerDirectory
     .eq('id', playerId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 
   if (data) return toPlayerDirectoryEntry(data as PlayerDirectoryRow);
 
@@ -617,7 +617,7 @@ export async function fetchPlayerById(playerId: string): Promise<PlayerDirectory
     .eq('id', playerId)
     .single();
 
-  if (playerError) throw playerError;
+  if (playerError) throw new Error(playerError.message);
 
   const p = player as { id: string; display_name: string };
   return { id: p.id, displayName: p.display_name, gamesPlayed: 0, wins: 0, winRate: 0, latestPlayedAt: '', latestGameNumber: 0, commanders: [] };
@@ -629,7 +629,7 @@ export async function fetchPlayerRecentGames(playerId: string, limit: number): P
     .select('game_id')
     .eq('player_id', playerId);
 
-  if (participantError) throw participantError;
+  if (participantError) throw new Error(participantError.message);
 
   const gameIds = (participantData ?? []).map((p) => (p as { game_id: string }).game_id);
 
@@ -644,7 +644,7 @@ export async function fetchPlayerRecentGames(playerId: string, limit: number): P
     .order('id', { ascending: false })
     .limit(limit);
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 
   const gameRows = (data as NumberedGameRow[] | null) ?? [];
   if (gameRows.length === 0) return [];
@@ -677,7 +677,7 @@ export async function relinkParticipantPlayer(
     p_game_id: gameId,
     p_new_display_name: newDisplayName,
   });
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 export function readSingleName(value: { name?: string; display_name?: string } | { name?: string; display_name?: string }[] | null) {

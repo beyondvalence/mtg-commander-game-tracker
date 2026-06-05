@@ -33,8 +33,8 @@ export default function JoinPodPage() {
   if (error) {
     return (
       <section className='wireframe-page'>
-        <p className='wireframe-copy' style={{ color: 'var(--color-error, red)' }}>{error}</p>
-        <button onClick={() => navigate('/')} className='btn-secondary mt-4'>
+        <p className='text-base app-error-text'>{error}</p>
+        <button onClick={() => navigate('/')} className='logout-button mt-4'>
           Go home
         </button>
       </section>
@@ -43,7 +43,7 @@ export default function JoinPodPage() {
 
   return (
     <section className='wireframe-page'>
-      <p className='wireframe-copy'>Joining pod…</p>
+      <p className='app-muted text-base' role='status'>Joining pod…</p>
     </section>
   );
 }

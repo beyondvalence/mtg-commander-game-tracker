@@ -131,14 +131,14 @@ export default function MyProfilePage() {
 
   return (
     <section className='wireframe-shell space-y-6'>
-      {isLoading && <p className='wireframe-copy'>Loading profile...</p>}
-      {error && <p className='wireframe-copy text-red-600'>{error}</p>}
+      {isLoading && <p className='app-muted text-sm' role='status'>Loading profile...</p>}
+      {error && <p className='text-sm app-error-text'>{error}</p>}
 
       {showNameForm && (
         <div>
           <h1 className='wireframe-title'>My Profile</h1>
           {!isChanging && (
-            <p className='mt-2 text-sm text-amber-600'>
+            <p className='mt-2 text-sm app-warning-text'>
               Display name not set — you won't appear as a player option when adding games to your pod.
             </p>
           )}

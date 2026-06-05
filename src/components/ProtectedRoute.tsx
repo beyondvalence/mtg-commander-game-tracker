@@ -8,7 +8,7 @@ export function ProtectedRoute() {
   if (isLoading) {
     return (
       <section className='wireframe-page'>
-        <p className='wireframe-copy'>Checking session...</p>
+        <p className='app-muted text-base' role='status'>Checking session...</p>
       </section>
     );
   }

@@ -214,8 +214,8 @@ export default function PlayersPage() {
         )}
       </div>
 
-      {isLoading && <p className='wireframe-copy'>Loading player directory...</p>}
-      {error && <p className='wireframe-copy text-red-600'>{error}</p>}
+      {isLoading && <p className='app-muted text-sm' role='status'>Loading player directory...</p>}
+      {error && <p className='text-sm app-error-text'>{error}</p>}
 
       {!isLoading && !error && filteredPlayers.length === 0 && (
         <div className='app-card text-left'>

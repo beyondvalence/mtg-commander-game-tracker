@@ -201,8 +201,8 @@ function AccountTab() {
             placeholder='Your display name'
             className='app-input-compact w-full'
           />
-          {error && <p className='text-xs text-red-600'>{error}</p>}
-          {success && <p className='text-xs text-green-600'>Saved!</p>}
+          {error && <p className='text-xs app-error-text'>{error}</p>}
+          {success && <p className='text-xs app-success-text'>Saved!</p>}
           <button
             type='button'
             className='logout-button w-full text-sm'

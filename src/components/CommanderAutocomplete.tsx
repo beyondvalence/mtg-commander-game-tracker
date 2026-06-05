@@ -138,7 +138,7 @@ export function CommanderAutocomplete({
         }}
         placeholder={placeholder}
       />
-      {b && <p className='text-xs text-amber-600'>Broadened results</p>}
+      {b && <p className='text-xs app-warning-text'>Broadened results</p>}
       {dropdown}
     </div>
   );

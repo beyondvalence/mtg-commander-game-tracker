@@ -346,7 +346,7 @@ export default function AddGamePage() {
   if (!isPodAdmin) {
     return (
       <section className='wireframe-shell'>
-        <p className='wireframe-copy'>Only pod admins can add games.</p>
+        <p className='app-muted text-base'>Only pod admins can add games.</p>
       </section>
     );
   }
@@ -525,7 +525,7 @@ export default function AddGamePage() {
                           className='inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold'
                           style={participant.killedFirst
                             ? { opacity: 0.4, cursor: 'not-allowed', borderColor: 'var(--app-border)', color: 'var(--app-text)', background: 'var(--app-panel-soft)' }
-                            : { borderColor: participant.isWinner ? '#047857' : 'var(--app-border)', color: participant.isWinner ? '#047857' : 'var(--app-text)', background: participant.isWinner ? 'color-mix(in srgb, #047857 10%, var(--app-panel))' : 'var(--app-panel-soft)' }}
+                            : { borderColor: participant.isWinner ? 'var(--app-success)' : 'var(--app-border)', color: participant.isWinner ? 'var(--app-success)' : 'var(--app-text)', background: participant.isWinner ? 'color-mix(in srgb, var(--app-success) 10%, var(--app-panel))' : 'var(--app-panel-soft)' }}
                         >
                           <input
                             type='checkbox'
@@ -538,7 +538,7 @@ export default function AddGamePage() {
                         </label>
                         <label
                           className='inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold'
-                          style={{ borderColor: participant.killedFirst ? '#dc2626' : 'var(--app-border)', color: participant.killedFirst ? '#dc2626' : 'var(--app-text)', background: participant.killedFirst ? 'color-mix(in srgb, #dc2626 10%, var(--app-panel))' : 'var(--app-panel-soft)' }}
+                          style={{ borderColor: participant.killedFirst ? 'var(--app-error)' : 'var(--app-border)', color: participant.killedFirst ? 'var(--app-error)' : 'var(--app-text)', background: participant.killedFirst ? 'color-mix(in srgb, var(--app-error) 10%, var(--app-panel))' : 'var(--app-panel-soft)' }}
                         >
                           <input
                             type='checkbox'
@@ -586,7 +586,7 @@ export default function AddGamePage() {
                             </p>
                             <button
                               type='button'
-                              className='font-semibold text-red-600 hover:text-red-800'
+                              className='font-semibold app-error-text hover:opacity-70'
                               onClick={() => handleCommanderClear(participant.seat)}
                             >
                               Clear
@@ -617,7 +617,7 @@ export default function AddGamePage() {
                               </p>
                               <button
                                 type='button'
-                                className='font-semibold text-red-600 hover:text-red-800'
+                                className='font-semibold app-error-text hover:opacity-70'
                                 onClick={() => handleSecondaryCommanderClear(participant.seat)}
                               >
                                 Clear
@@ -691,7 +691,7 @@ export default function AddGamePage() {
             })}
           </div>
 
-          {error && <p className='text-sm text-red-600'>{error}</p>}
+          {error && <p className='text-sm app-error-text'>{error}</p>}
         </div>
 
         <datalist id='player-name-suggestions'>

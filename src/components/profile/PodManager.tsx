@@ -100,7 +100,7 @@ export function PodManager() {
 
   return (
     <div className='space-y-4'>
-      {error && <p className='text-xs text-red-600'>{error}</p>}
+      {error && <p className='text-xs app-error-text'>{error}</p>}
 
       {pods.length === 0 && (
         <p className='app-muted text-sm'>No pods yet. Create one below.</p>
@@ -177,7 +177,7 @@ export function PodManager() {
                               </p>
                               <p className='app-muted text-xs'>{m.role}</p>
                               {m.displayName === null && (
-                                <p className='text-xs text-amber-600'>Display name not set</p>
+                                <p className='text-xs app-warning-text'>Display name not set</p>
                               )}
                             </div>
                             {userIsAdmin && !isSelf && (
@@ -185,7 +185,7 @@ export function PodManager() {
                                 {m.role === 'member' && (
                                   <button
                                     type='button'
-                                    className='app-muted text-xs underline-offset-2 hover:underline'
+                                    className='app-muted min-h-[2rem] px-2 py-1 text-xs underline-offset-2 hover:underline'
                                     disabled={memberOp === promoteKey}
                                     onClick={() => handleMemberOp(pod.podId, m.userId, 'promote')}
                                   >
@@ -195,7 +195,7 @@ export function PodManager() {
                                 {m.role === 'admin' && (
                                   <button
                                     type='button'
-                                    className='app-muted text-xs underline-offset-2 hover:underline'
+                                    className='app-muted min-h-[2rem] px-2 py-1 text-xs underline-offset-2 hover:underline'
                                     disabled={memberOp === demoteKey}
                                     onClick={() => handleMemberOp(pod.podId, m.userId, 'demote')}
                                   >
@@ -204,7 +204,7 @@ export function PodManager() {
                                 )}
                                 <button
                                   type='button'
-                                  className='text-xs text-red-500 underline-offset-2 hover:underline'
+                                  className='app-error-text min-h-[2rem] px-2 py-1 text-xs underline-offset-2 hover:underline'
                                   disabled={memberOp === opKey}
                                   onClick={() => handleMemberOp(pod.podId, m.userId, 'kick')}
                                 >

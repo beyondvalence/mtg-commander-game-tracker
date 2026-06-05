@@ -506,11 +506,11 @@ export default function GameHistoryPage() {
         </div>
       </div>
 
-      {isLoading && <p className='wireframe-copy'>Loading games...</p>}
-      {error && <p className='wireframe-copy text-red-600'>{error}</p>}
+      {isLoading && <p className='app-muted text-sm' role='status'>Loading games...</p>}
+      {error && <p className='text-sm app-error-text'>{error}</p>}
 
       {!isLoading && !error && games.length === 0 && (
-        <p className='wireframe-copy'>No games saved yet. Add a game to start building your history.</p>
+        <p className='app-muted text-base'>No games saved yet. Add a game to start building your history.</p>
       )}
 
       {!isLoading && !error && games.length > 0 && filteredGames.length === 0 && (
@@ -623,8 +623,8 @@ export default function GameHistoryPage() {
                   <div
                     className='app-chip border'
                     style={{
-                      borderColor: game.finished ? '#047857' : '#dc2626',
-                      color: game.finished ? '#047857' : '#dc2626',
+                      borderColor: game.finished ? 'var(--app-success)' : 'var(--app-error)',
+                      color: game.finished ? 'var(--app-success)' : 'var(--app-error)',
                     }}
                   >
                     {game.finished ? 'Game Finished' : 'Unfinished'}
@@ -694,9 +694,9 @@ export default function GameHistoryPage() {
                                   onClick={() => handleWinnerDraftChange(game.id, isSelectedWinner ? '' : participant.id)}
                                   className='rounded-full border px-3 py-1 text-sm font-semibold transition'
                                   style={{
-                                    borderColor: isSelectedWinner ? '#047857' : 'var(--app-border)',
-                                    color: isSelectedWinner ? '#047857' : 'var(--app-text)',
-                                    background: isSelectedWinner ? 'color-mix(in srgb, #047857 10%, var(--app-panel))' : 'var(--app-panel)',
+                                    borderColor: isSelectedWinner ? 'var(--app-success)' : 'var(--app-border)',
+                                    color: isSelectedWinner ? 'var(--app-success)' : 'var(--app-text)',
+                                    background: isSelectedWinner ? 'color-mix(in srgb, var(--app-success) 10%, var(--app-panel))' : 'var(--app-panel)',
                                   }}
                                 >
                                   Winner
@@ -707,9 +707,9 @@ export default function GameHistoryPage() {
                                   disabled={isSelectedWinner}
                                   className='rounded-full border px-3 py-1 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40'
                                   style={{
-                                    borderColor: isSelectedKilledFirst ? '#dc2626' : 'var(--app-border)',
-                                    color: isSelectedKilledFirst ? '#dc2626' : 'var(--app-text)',
-                                    background: isSelectedKilledFirst ? 'color-mix(in srgb, #dc2626 10%, var(--app-panel))' : 'var(--app-panel)',
+                                    borderColor: isSelectedKilledFirst ? 'var(--app-error)' : 'var(--app-border)',
+                                    color: isSelectedKilledFirst ? 'var(--app-error)' : 'var(--app-text)',
+                                    background: isSelectedKilledFirst ? 'color-mix(in srgb, var(--app-error) 10%, var(--app-panel))' : 'var(--app-panel)',
                                   }}
                                 >
                                   {killedFirstDraftCount >= 2 && isSelectedKilledFirst ? 'Died Together' : 'Killed First'}
@@ -718,12 +718,12 @@ export default function GameHistoryPage() {
                             ) : (
                               <>
                                 {participant.is_winner && (
-                                  <span className='rounded-full border border-emerald-700 px-3 py-1 text-sm font-semibold text-emerald-700'>
+                                  <span className='rounded-full border px-3 py-1 text-sm font-semibold app-success-text' style={{ borderColor: 'var(--app-success)' }}>
                                     Winner
                                   </span>
                                 )}
                                 {participant.killed_first && (
-                                  <span className='rounded-full border border-red-600 px-3 py-1 text-sm font-semibold text-red-600'>
+                                  <span className='rounded-full border px-3 py-1 text-sm font-semibold app-error-text' style={{ borderColor: 'var(--app-error)' }}>
                                     {killedFirstCount >= 2 ? 'Died Together' : 'Killed First'}
                                   </span>
                                 )}

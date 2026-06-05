@@ -75,9 +75,9 @@ export default function DashboardPage() {
           {activePod && <p className='app-muted text-sm'>{activePod.podName}</p>}
         </div>
 
-        {!activePodId && <p className='wireframe-copy'>No pod selected. Create or join a pod to get started.</p>}
-        {isLoading && activePodId && <p className='wireframe-copy'>Loading tracker summary...</p>}
-        {error && <p className='wireframe-copy text-red-600'>{error}</p>}
+        {!activePodId && <p className='app-muted text-base'>No pod selected. Create or join a pod to get started.</p>}
+        {isLoading && activePodId && <p className='app-muted text-sm' role='status'>Loading tracker summary...</p>}
+        {error && <p className='text-sm app-error-text'>{error}</p>}
 
         {!isLoading && !error && snapshot && (
           <>
